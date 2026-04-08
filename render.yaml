@@ -16,17 +16,17 @@ services:
         fromService:
           type: web
           name: black-papers-web
-          property: url
+          property: host
       - key: PUBLIC_APP_URL
         fromService:
           type: web
           name: black-papers-web
-          property: url
+          property: host
       - key: BACKEND_PUBLIC_URL
         fromService:
           type: web
           name: black-papers-api
-          property: url
+          property: host
       - key: APP_ENV
         value: production
       - key: ADMIN_BOOTSTRAP_EMAIL
@@ -108,6 +108,7 @@ services:
         fromService:
           type: web
           name: black-papers-api
-          property: url
+          property: host
       - key: VITE_ENABLE_ADMIN_CONSOLE
         value: "false"
+
