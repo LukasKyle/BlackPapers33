@@ -12,23 +12,14 @@ services:
         value: 20
       - key: PORT
         value: 10000
-      - key: CORS_ORIGIN
-        fromService:
-          type: web
-          name: black-papers-web
-          property: host
-      - key: PUBLIC_APP_URL
-        fromService:
-          type: web
-          name: black-papers-web
-          property: host
-      - key: BACKEND_PUBLIC_URL
-        fromService:
-          type: web
-          name: black-papers-api
-          property: host
       - key: APP_ENV
         value: production
+      - key: CORS_ORIGIN
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
+      - key: BACKEND_PUBLIC_URL
+        sync: false
       - key: ADMIN_BOOTSTRAP_EMAIL
         sync: false
       - key: ADMIN_BOOTSTRAP_PASSWORD
@@ -105,10 +96,6 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_BASE_URL
-        fromService:
-          type: web
-          name: black-papers-api
-          property: host
+        sync: false
       - key: VITE_ENABLE_ADMIN_CONSOLE
         value: "false"
-
