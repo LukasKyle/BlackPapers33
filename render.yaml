@@ -1,0 +1,113 @@
+services:
+  - type: web
+    name: black-papers-api
+    runtime: node
+    plan: free
+    autoDeploy: true
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 10000
+      - key: CORS_ORIGIN
+        fromService:
+          type: web
+          name: black-papers-web
+          property: url
+      - key: PUBLIC_APP_URL
+        fromService:
+          type: web
+          name: black-papers-web
+          property: url
+      - key: BACKEND_PUBLIC_URL
+        fromService:
+          type: web
+          name: black-papers-api
+          property: url
+      - key: APP_ENV
+        value: production
+      - key: ADMIN_BOOTSTRAP_EMAIL
+        sync: false
+      - key: ADMIN_BOOTSTRAP_PASSWORD
+        sync: false
+      - key: ENABLE_LOCAL_RANDOM_ADMIN_BOOTSTRAP
+        value: "false"
+      - key: ALLOW_DEV_SUBSCRIPTION_STUB
+        value: "false"
+      - key: MAX_JSON_BODY_BYTES
+        value: "65536"
+      - key: SESSION_TOKEN_SECRET
+        sync: false
+      - key: SESSION_COOKIE_NAME
+        value: bp_session
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_COOKIE_SAME_SITE
+        value: None
+      - key: SESSION_IDLE_TTL_HOURS
+        value: "12"
+      - key: SESSION_MAX_TTL_DAYS
+        value: "14"
+      - key: SESSION_ROTATION_MINUTES
+        value: "30"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_MAX_AUTH
+        value: "10"
+      - key: RATE_LIMIT_MAX_PUBLIC_WRITE
+        value: "20"
+      - key: RATE_LIMIT_MAX_SUBSCRIPTION
+        value: "20"
+      - key: RATE_LIMIT_MAX_ADMIN
+        value: "120"
+      - key: LEMON_SQUEEZY_API_KEY
+        sync: false
+      - key: LEMON_SQUEEZY_STORE_ID
+        sync: false
+      - key: LEMON_SQUEEZY_WEBHOOK_SECRET
+        sync: false
+      - key: LEMON_SQUEEZY_CHECKOUT_SUCCESS_URL
+        sync: false
+      - key: LEMON_SQUEEZY_CHECKOUT_CANCEL_URL
+        sync: false
+      - key: LEMON_VARIANT_ID_BOURSE
+        sync: false
+      - key: LEMON_VARIANT_ID_CRYPTO
+        sync: false
+      - key: LEMON_VARIANT_ID_COMBO
+        sync: false
+      - key: LEMON_CHECKOUT_URL_BOURSE
+        sync: false
+      - key: LEMON_CHECKOUT_URL_CRYPTO
+        sync: false
+      - key: LEMON_CHECKOUT_URL_COMBO
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: console
+      - key: EMAIL_FROM
+        value: Black Papers <no-reply@blackpapers.local>
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_TOKEN_SECRET
+        sync: false
+  - type: web
+    name: black-papers-web
+    runtime: static
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: black-papers-api
+          property: url
+      - key: VITE_ENABLE_ADMIN_CONSOLE
+        value: "false"

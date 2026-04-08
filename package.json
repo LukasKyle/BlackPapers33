@@ -1,0 +1,36 @@
+{
+  "name": "black-papers",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node backend/server.cjs",
+    "start:api": "node backend/server.cjs",
+    "api": "npm run start:api",
+    "web": "vite",
+    "dev": "concurrently -k -n API,WEB -c green,cyan \"npm:api\" \"npm:web\"",
+    "build:web": "vite build",
+    "build": "npm run build:web",
+    "preview": "vite preview",
+    "check:backend": "node --check backend/server.cjs",
+    "check": "npm run check:backend && npm run build:web",
+    "admin:reset": "node backend/scripts/reset-admin.cjs"
+  },
+  "dependencies": {
+    "lucide-react": "^0.563.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.13.0",
+    "recharts": "^3.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.2.0",
+    "autoprefixer": "^10.4.27",
+    "concurrently": "^9.2.1",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7"
+  }
+}
