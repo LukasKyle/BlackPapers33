@@ -105,6 +105,8 @@ const PLAN_PRICE_BOURSE_EUR = Number(process.env.PLAN_PRICE_BOURSE_EUR || 29);
 const PLAN_PRICE_CRYPTO_EUR = Number(process.env.PLAN_PRICE_CRYPTO_EUR || 29);
 const PLAN_PRICE_COMBO_EUR = Number(process.env.PLAN_PRICE_COMBO_EUR || 49);
 const AFFILIATE_CRYPTO_COMMISSION_RATE = Number(process.env.AFFILIATE_CRYPTO_COMMISSION_RATE || 0.5);
+const ENABLE_MARKET_DIAGNOSTICS = parseBooleanEnv(process.env.ENABLE_MARKET_DIAGNOSTICS, false);
+const MARKET_DIAGNOSTIC_THROTTLE_MS = Number(process.env.MARKET_DIAGNOSTIC_THROTTLE_MS || 30 * 1000);
 const STORE_DIR_MODE = 0o700;
 const STORE_FILE_MODE = 0o600;
 const CORS_ALLOWED_ORIGINS = String(ORIGIN || '')
@@ -243,6 +245,7 @@ let cryptoTickerCache = {
   items: []
 };
 const stockSparklineMemory = new Map();
+const marketDiagnosticsLastLogByKey = new Map();
 const FALLBACK_MARKET_TICKER = {
   crypto: [
     { symbol: 'BTC', name: 'Bitcoin', price: 68420, changePercent: 1.24 },
@@ -2428,6 +2431,24 @@ const fetchJsonWithTimeout = async (url, init = {}, timeoutMs = 8000) => {
   return response.json();
 };
 
+const formatDiagnosticError = (error) => {
+  if (!error) return 'unknown_error';
+  const rawMessage = typeof error === 'string' ? error : (error?.message || String(error));
+  const message = safeString(rawMessage, 220) || 'unknown_error';
+  const name = safeString(error?.name || '', 60);
+  return name ? `${name}:${message}` : message;
+};
+
+const logMarketDiagnostic = (key, message) => {
+  if (!ENABLE_MARKET_DIAGNOSTICS) return;
+  const normalizedKey = safeString(key, 80) || 'general';
+  const now = Date.now();
+  const previous = Number(marketDiagnosticsLastLogByKey.get(normalizedKey) || 0);
+  if (now - previous < MARKET_DIAGNOSTIC_THROTTLE_MS) return;
+  marketDiagnosticsLastLogByKey.set(normalizedKey, now);
+  console.warn(`[MARKET_DIAG][${normalizedKey}] ${safeString(message, 280)}`);
+};
+
 const parseDateToIso = (value, fallbackIso = new Date().toISOString()) => {
   const parsedMs = Date.parse(String(value || ''));
   if (!Number.isFinite(parsedMs)) return fallbackIso;
@@ -2523,6 +2544,17 @@ const loadNewsFeed = async () => {
     })
   );
 
+  settled.forEach((entry, index) => {
+    const sourceName = safeString(GOOGLE_NEWS_RSS_SOURCES[index]?.name || `source_${index}`, 80);
+    if (entry.status === 'rejected') {
+      logMarketDiagnostic(`rss_${sourceName}`, `${sourceName} failed (${formatDiagnosticError(entry.reason)})`);
+      return;
+    }
+    if (!Array.isArray(entry.value) || !entry.value.length) {
+      logMarketDiagnostic(`rss_${sourceName}_empty`, `${sourceName} returned 0 parsed items`);
+    }
+  });
+
   const items = settled.flatMap((entry) => entry.status === 'fulfilled' ? entry.value : []);
   const unique = [];
   const seen = new Set();
@@ -2534,6 +2566,9 @@ const loadNewsFeed = async () => {
   }
   unique.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
   const finalItems = unique.slice(0, 30);
+  if (!finalItems.length) {
+    logMarketDiagnostic('rss_global_empty', 'All RSS sources empty or unavailable, using fallback items');
+  }
   rssCache = {
     timestamp: now,
     items: finalItems.length ? finalItems : FALLBACK_NEWS_FEED_ITEMS
@@ -2605,7 +2640,8 @@ const loadStockQuotes = async () => {
       quotes: live.quotes
     };
     return stockQuotesCache;
-  } catch {
+  } catch (error) {
+    logMarketDiagnostic('stocks_yahoo', `Yahoo stocks fetch failed (${formatDiagnosticError(error)})`);
     const fallbackQuotes = MOCK_STOCK_QUOTES.map((quote) => {
       const sparkline = appendSparklinePoint(quote.symbol, quote.price, quote.sparkline);
       return {
@@ -2669,7 +2705,8 @@ const loadCryptoTicker = async () => {
       items: live.items
     };
     return cryptoTickerCache;
-  } catch {
+  } catch (error) {
+    logMarketDiagnostic('crypto_coingecko', `CoinGecko crypto fetch failed (${formatDiagnosticError(error)})`);
     cryptoTickerCache = {
       timestamp: now,
       mode: 'fallback',
@@ -2700,6 +2737,12 @@ const getMarketTickerSnapshot = async () => {
   const mode = stocks.mode === 'live' && cryptoTicker.mode === 'live'
     ? 'live'
     : (stocks.mode === 'fallback' && cryptoTicker.mode === 'fallback' ? 'fallback' : 'partial');
+  if (mode !== 'live') {
+    logMarketDiagnostic(
+      'market_mode',
+      `Ticker mode=${mode} (stocks=${safeString(stocks.source, 80) || stocks.mode}, crypto=${safeString(cryptoTicker.source, 80) || cryptoTicker.mode})`
+    );
+  }
   return {
     mode,
     sources: {
@@ -4420,7 +4463,8 @@ const server = http.createServer(async (req, res) => {
         sources: GOOGLE_NEWS_RSS_SOURCES.map((source) => source.name),
         mode
       });
-    } catch {
+    } catch (error) {
+      logMarketDiagnostic('endpoint_news_feed', `/api/news-feed failed (${formatDiagnosticError(error)})`);
       return json(res, 200, {
         items: FALLBACK_NEWS_FEED_ITEMS,
         updatedAt: new Date().toISOString(),
@@ -4434,7 +4478,8 @@ const server = http.createServer(async (req, res) => {
     try {
       const snapshot = await getMarketTickerSnapshot();
       return json(res, 200, snapshot);
-    } catch {
+    } catch (error) {
+      logMarketDiagnostic('endpoint_market_ticker', `/api/market-ticker failed (${formatDiagnosticError(error)})`);
       return json(res, 200, {
         mode: 'fallback',
         sources: {

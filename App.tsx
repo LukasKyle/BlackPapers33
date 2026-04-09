@@ -215,7 +215,29 @@ const SUBSCRIPTION_PLANS: Plan[] = [
 
 const MAX_REFERRAL_CODE_LENGTH = 32;
 const MAX_VIDEO_URL_LENGTH = 1024;
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '';
+const normalizeApiBaseUrl = (value: string): string => String(value || '').trim().replace(/\/+$/, '');
+const inferRenderApiBaseUrl = (): string => {
+  if (typeof window === 'undefined') return '';
+  const host = String(window.location.hostname || '').toLowerCase();
+  if (!host.endsWith('.onrender.com')) return '';
+
+  const explicitRenderServiceUrl = normalizeApiBaseUrl((import.meta as any).env?.VITE_RENDER_API_SERVICE_URL || '');
+  if (explicitRenderServiceUrl) return explicitRenderServiceUrl;
+
+  const renderApiServiceName = String((import.meta as any).env?.VITE_RENDER_API_SERVICE_NAME || '').trim();
+  if (renderApiServiceName) return `https://${renderApiServiceName}.onrender.com`;
+
+  if (host.startsWith('black-papers-web.')) {
+    return `${window.location.protocol}//${host.replace('black-papers-web.', 'black-papers-api.')}`;
+  }
+  return '';
+};
+
+const API_BASE_URL = (() => {
+  const explicit = normalizeApiBaseUrl((import.meta as any).env?.VITE_API_BASE_URL || '');
+  if (explicit) return explicit;
+  return inferRenderApiBaseUrl();
+})();
 const LEAD_STORAGE_KEY = 'bp_lead_email';
 
 const sanitizeReferralCode = (raw: string): string => {
@@ -237,7 +259,11 @@ const isSafeExternalUrl = (rawUrl: string): boolean => {
   }
 };
 
-const buildApiUrl = (path: string): string => `${API_BASE_URL}${path}`;
+const buildApiUrl = (path: string): string => {
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return API_BASE_URL ? `${API_BASE_URL}${normalizedPath}` : normalizedPath;
+};
 const apiFetch = (path: string, init: RequestInit = {}) => {
   return fetch(buildApiUrl(path), {
     ...init,
@@ -1088,8 +1114,50 @@ const TwitterXLogo = ({ size = 16, className }: { size?: number, className?: str
 
 // --- TICKER COMPONENTS ---
 
+const CLIENT_FALLBACK_TICKER_SNAPSHOT: MarketTickerSnapshot = {
+  mode: 'fallback',
+  sources: {
+    stocks: 'client_fallback',
+    crypto: 'client_fallback'
+  },
+  crypto: [
+    { symbol: 'BTC', name: 'Bitcoin', price: 68420, changePercent: 1.24 },
+    { symbol: 'ETH', name: 'Ethereum', price: 3522, changePercent: 0.91 },
+    { symbol: 'SOL', name: 'Solana', price: 148.3, changePercent: -0.41 },
+    { symbol: 'XRP', name: 'XRP', price: 0.67, changePercent: 0.66 }
+  ],
+  stocks: [
+    { symbol: 'SPY', name: 'SPDR S&P 500 ETF', price: 544.21, changePercent: 0.38 },
+    { symbol: 'QQQ', name: 'Invesco QQQ Trust', price: 472.13, changePercent: 0.44 },
+    { symbol: 'AAPL', name: 'Apple', price: 214.38, changePercent: 1.01 },
+    { symbol: 'MSFT', name: 'Microsoft', price: 468.22, changePercent: 0.94 }
+  ],
+  updatedAt: new Date().toISOString()
+};
+
+const CLIENT_FALLBACK_FEED_ITEMS: Array<{ id: string; source: string; title: string; publishedAt: string }> = [
+  {
+    id: 'client-fallback-bloomberg',
+    source: 'Bloomberg',
+    title: 'Les desks surveillent un dollar plus fragile avant les prochaines statistiques macro',
+    publishedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'client-fallback-bfm',
+    source: 'BFM Business',
+    title: 'Les marches europeens temporisent avant les annonces de banques centrales',
+    publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'client-fallback-lesechos',
+    source: 'Les Echos',
+    title: 'Inflation, taux et actions : les niveaux a surveiller cette semaine',
+    publishedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
+  }
+];
+
 const MarketMarquee: React.FC = () => {
-  const [snapshot, setSnapshot] = useState<MarketTickerSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<MarketTickerSnapshot>(CLIENT_FALLBACK_TICKER_SNAPSHOT);
 
   useEffect(() => {
     let isMounted = true;
@@ -1097,19 +1165,25 @@ const MarketMarquee: React.FC = () => {
     const loadTicker = async () => {
       try {
         const response = await apiFetch('/api/market-ticker');
+        if (!response.ok) return;
         const data = await response.json();
-        if (!isMounted || !response.ok) return;
+        if (!isMounted) return;
         if (Array.isArray(data?.crypto) && Array.isArray(data?.stocks)) {
           setSnapshot({
             mode: data.mode === 'live' || data.mode === 'partial' ? data.mode : 'fallback',
             sources: data.sources || {},
-            crypto: data.crypto,
-            stocks: data.stocks,
+            crypto: data.crypto.length ? data.crypto : CLIENT_FALLBACK_TICKER_SNAPSHOT.crypto,
+            stocks: data.stocks.length ? data.stocks : CLIENT_FALLBACK_TICKER_SNAPSHOT.stocks,
             updatedAt: data.updatedAt || new Date().toISOString()
           });
         }
       } catch {
         if (!isMounted) return;
+        setSnapshot((prev) => ({
+          ...prev,
+          mode: 'fallback',
+          updatedAt: new Date().toISOString()
+        }));
       }
     };
 
@@ -1121,12 +1195,12 @@ const MarketMarquee: React.FC = () => {
     };
   }, []);
 
-  const cryptoData = snapshot?.crypto || [];
-  const stockData = snapshot?.stocks || [];
-  const rowLabel = snapshot?.mode === 'live' ? 'LIVE' : snapshot?.mode === 'partial' ? 'HYBRIDE' : 'FALLBACK';
-  const rowLabelClass = snapshot?.mode === 'live'
+  const cryptoData = snapshot.crypto || [];
+  const stockData = snapshot.stocks || [];
+  const rowLabel = snapshot.mode === 'live' ? 'LIVE' : snapshot.mode === 'partial' ? 'HYBRIDE' : 'FALLBACK';
+  const rowLabelClass = snapshot.mode === 'live'
     ? 'text-green-400 border-green-500/30 bg-green-500/10'
-    : snapshot?.mode === 'partial'
+    : snapshot.mode === 'partial'
       ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10'
       : 'text-red-400 border-red-500/30 bg-red-500/10';
 
@@ -1137,7 +1211,7 @@ const MarketMarquee: React.FC = () => {
           Ticker {rowLabel}
         </span>
         <span className="text-[10px] text-gray-500">
-          Maj {snapshot?.updatedAt ? new Date(snapshot.updatedAt).toLocaleTimeString('fr-FR') : '--:--'}
+          Maj {snapshot.updatedAt ? new Date(snapshot.updatedAt).toLocaleTimeString('fr-FR') : '--:--'}
         </span>
       </div>
 
@@ -1205,7 +1279,7 @@ const MarketMarquee: React.FC = () => {
 };
 
 const InsiderFeed: React.FC = () => {
-  const [items, setItems] = useState<Array<{ id: string; source: string; title: string; publishedAt: string }>>([]);
+  const [items, setItems] = useState<Array<{ id: string; source: string; title: string; publishedAt: string }>>(CLIENT_FALLBACK_FEED_ITEMS);
   const [mode, setMode] = useState<'live' | 'fallback'>('fallback');
 
   useEffect(() => {
@@ -1213,8 +1287,9 @@ const InsiderFeed: React.FC = () => {
     const load = async () => {
       try {
         const response = await apiFetch('/api/news-feed');
+        if (!response.ok) return;
         const data = await response.json();
-        if (!isMounted || !response.ok) return;
+        if (!isMounted) return;
         const nextItems = Array.isArray(data?.items)
           ? data.items.slice(0, 12).map((item: any, index: number) => ({
               id: String(item?.id || `rss-${index}`),
@@ -1223,10 +1298,12 @@ const InsiderFeed: React.FC = () => {
               publishedAt: String(item?.publishedAt || new Date().toISOString())
             }))
           : [];
-        setItems(nextItems);
+        setItems(nextItems.length ? nextItems : CLIENT_FALLBACK_FEED_ITEMS);
         setMode(data?.mode === 'live' ? 'live' : 'fallback');
       } catch {
         if (!isMounted) return;
+        setMode('fallback');
+        setItems(CLIENT_FALLBACK_FEED_ITEMS);
       }
     };
     load();

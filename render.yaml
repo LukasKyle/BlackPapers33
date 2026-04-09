@@ -39,6 +39,10 @@ services:
         value: "false"
       - key: MAX_JSON_BODY_BYTES
         value: "65536"
+      - key: ENABLE_MARKET_DIAGNOSTICS
+        value: "false"
+      - key: MARKET_DIAGNOSTIC_THROTTLE_MS
+        value: "30000"
       - key: SESSION_TOKEN_SECRET
         sync: false
       - key: SESSION_COOKIE_NAME
@@ -129,5 +133,7 @@ services:
           type: web
           name: black-papers-api
           property: url
+      - key: VITE_RENDER_API_SERVICE_NAME
+        value: black-papers-api
       - key: VITE_ENABLE_ADMIN_CONSOLE
         value: "false"
