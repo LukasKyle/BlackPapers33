@@ -65,7 +65,28 @@ Le projet utilise un CRM interne léger:
 - pipeline dans la console admin (onglet `CRM CLIENTS`)
 - suivi onboarding / activation VIP / statut abonnement
 
-## 5) Mini manuel non-technique CRM
+## 5) Affiliation : logique appliquée (crypto interne + Lemon externe)
+
+### Règle appliquée côté backend
+- Paiement `MANUAL` (crypto) : commission parrain = `50%` du montant payé.
+- Paiement `LEMON_SQUEEZY` (carte) :
+  - `LEMON_AFFILIATE_EXTERNAL_ENABLED=true` : mode `Externe Lemon`.
+  - `LEMON_AFFILIATE_EXTERNAL_ENABLED=false` : mode `Carte sans partage interne`.
+- Le statut d'abonnement du filleul reste visible dans le CRM, avec indicateur de relance.
+
+### Variables utiles
+- `AFFILIATE_CRYPTO_COMMISSION_RATE=0.5`
+- `LEMON_AFFILIATE_EXTERNAL_ENABLED=true` (si vous activez le programme affiliation natif Lemon pour la carte)
+- `PLAN_PRICE_BOURSE_EUR=29`
+- `PLAN_PRICE_CRYPTO_EUR=29`
+- `PLAN_PRICE_COMBO_EUR=49`
+
+### Ce que vous voyez dans le CRM admin
+- `Canal paiement` : `Crypto manuel` ou `Carte (Lemon)`
+- `Mode commission` : `50% (crypto)`, `Externe Lemon` ou `Carte sans partage interne`
+- `Relance` : `Oui` pour les cas manuels qui nécessitent un suivi, sinon `Non` / `Non (auto)`
+
+## 6) Mini manuel non-technique CRM
 
 ### Voir un contact
 1. Connectez-vous en admin.
@@ -86,7 +107,7 @@ Le projet utilise un CRM interne léger:
    - `Vérification email en attente`
 2. Si besoin, modifiez l’utilisateur dans la grille des comptes (plan, statut, VIP manuel).
 
-## 6) Note admin: actions quotidiennes
+## 7) Note admin: actions quotidiennes
 
 ### Donner un accès VIP manuel
 1. Ouvrir `ADMIN` > `CRM CLIENTS`.
@@ -109,7 +130,7 @@ npm run admin:reset -- --email=admin@votredomaine.com --password='MotDePasseTres
 
 Le mot de passe existant n'est pas lisible (hashé), il faut le réinitialiser.
 
-## 7) Tests post-déploiement à exécuter
+## 8) Tests post-déploiement à exécuter
 
 1. `GET /api/health` renvoie `ok: true`.
 2. `GET /api/subscription/config` renvoie plans Lemon configurés.

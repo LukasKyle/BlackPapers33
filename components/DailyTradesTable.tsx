@@ -11,11 +11,12 @@ const formatPrice = (value: number) => {
   return value.toLocaleString('fr-FR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 };
 
-export const DailyTradesTable: React.FC<{ trades: Trade[] }> = ({ trades }) => {
+export const DailyTradesTable: React.FC<{ trades: Trade[]; title?: string; subtitle?: string }> = ({ trades, title, subtitle }) => {
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('heure');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [page, setPage] = useState(1);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const pageSize = 10;
 
@@ -81,21 +82,32 @@ export const DailyTradesTable: React.FC<{ trades: Trade[] }> = ({ trades }) => {
     <div className="bg-surface border border-gray-800 rounded-2xl overflow-hidden">
       <div className="p-4 border-b border-gray-800 bg-[#0c0c0c] flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h3 className="text-lg font-bold text-white">Flux de signaux du jour</h3>
-          <p className="text-xs text-gray-500">Tri, recherche et pagination integres.</p>
+          <h3 className="text-lg font-bold text-white">{title || 'Flux de signaux'}</h3>
+          <p className="text-xs text-gray-500">{subtitle || 'Tri, recherche et pagination intégrés.'}</p>
         </div>
-        <label className="flex items-center gap-2 bg-black border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-400">
-          <Search size={14} />
-          <input
-            value={query}
-            onChange={(e) => {
-              setPage(1);
-              setQuery(e.target.value);
-            }}
-            placeholder="Rechercher un actif, une raison..."
-            className="bg-transparent outline-none text-white placeholder:text-gray-600 w-full md:w-72"
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSearchOpen((previous) => !previous)}
+            className="inline-flex items-center gap-2 bg-black border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-white"
+          >
+            <Search size={14} />
+            Recherche (optionnelle)
+          </button>
+          {searchOpen && (
+            <label className="flex items-center gap-2 bg-black border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-400">
+              <Search size={14} />
+              <input
+                value={query}
+                onChange={(e) => {
+                  setPage(1);
+                  setQuery(e.target.value);
+                }}
+                placeholder="Rechercher un actif, une raison..."
+                className="bg-transparent outline-none text-white placeholder:text-gray-600 w-full md:w-72"
+              />
+            </label>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -173,4 +185,3 @@ export const DailyTradesTable: React.FC<{ trades: Trade[] }> = ({ trades }) => {
     </div>
   );
 };
-

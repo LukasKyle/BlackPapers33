@@ -49,9 +49,14 @@ const SESSION_COOKIE_SAME_SITE = safeString(
 const SESSION_IDLE_TTL_HOURS = Number(process.env.SESSION_IDLE_TTL_HOURS || 12);
 const SESSION_MAX_TTL_DAYS = Number(process.env.SESSION_MAX_TTL_DAYS || 14);
 const SESSION_ROTATION_MINUTES = Number(process.env.SESSION_ROTATION_MINUTES || 30);
+const SESSION_PERSISTENT_LOGIN = parseBooleanEnv(process.env.SESSION_PERSISTENT_LOGIN, false);
+const PERSISTENT_SESSION_TTL_DAYS = Number(process.env.PERSISTENT_SESSION_TTL_DAYS || 3650);
 const SESSION_TOKEN_SECRET = String(process.env.SESSION_TOKEN_SECRET || '').trim();
 const SESSION_IDLE_TTL_MS = SESSION_IDLE_TTL_HOURS * 60 * 60 * 1000;
 const SESSION_MAX_TTL_MS = SESSION_MAX_TTL_DAYS * 24 * 60 * 60 * 1000;
+const PERSISTENT_SESSION_TTL_MS = PERSISTENT_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+const EFFECTIVE_SESSION_IDLE_TTL_MS = SESSION_PERSISTENT_LOGIN ? PERSISTENT_SESSION_TTL_MS : SESSION_IDLE_TTL_MS;
+const EFFECTIVE_SESSION_MAX_TTL_MS = SESSION_PERSISTENT_LOGIN ? PERSISTENT_SESSION_TTL_MS : SESSION_MAX_TTL_MS;
 const SESSION_ROTATION_MS = SESSION_ROTATION_MINUTES * 60 * 1000;
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
 const RATE_LIMIT_MAX_AUTH = Number(process.env.RATE_LIMIT_MAX_AUTH || 10);
@@ -64,7 +69,15 @@ const EMAIL_PROVIDER = safeString(process.env.EMAIL_PROVIDER || 'console', 24).t
 const EMAIL_FROM = safeString(process.env.EMAIL_FROM || 'Black Papers <no-reply@blackpapers.local>', 256);
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim();
 const EMAIL_VERIFY_TOKEN_TTL_HOURS = Number(process.env.EMAIL_VERIFY_TOKEN_TTL_HOURS || 24);
+const PASSWORD_RESET_TOKEN_TTL_HOURS = Number(process.env.PASSWORD_RESET_TOKEN_TTL_HOURS || 2);
 const EMAIL_TOKEN_SECRET = String(process.env.EMAIL_TOKEN_SECRET || '').trim();
+const HUBSPOT_PORTAL_ID = safeString(process.env.HUBSPOT_PORTAL_ID || '', 64);
+const HUBSPOT_SIGNUP_FORM_GUID = safeString(process.env.HUBSPOT_SIGNUP_FORM_GUID || '', 128);
+const HUBSPOT_PRIVATE_APP_TOKEN = String(
+  process.env.HUBSPOT_PRIVATE_APP_TOKEN || process.env.HUBSPOT_ACCESS_TOKEN || ''
+).trim();
+const HUBSPOT_SYNC_TIMEOUT_MS = Number(process.env.HUBSPOT_SYNC_TIMEOUT_MS || 8000);
+const HUBSPOT_SIGNUP_SYNC_ENABLED = Boolean(HUBSPOT_PORTAL_ID && HUBSPOT_SIGNUP_FORM_GUID);
 const OAUTH_STATE_TTL_MINUTES = Number(process.env.OAUTH_STATE_TTL_MINUTES || 10);
 const OAUTH_GOOGLE_CLIENT_ID = safeString(process.env.OAUTH_GOOGLE_CLIENT_ID || '', 256);
 const OAUTH_GOOGLE_CLIENT_SECRET = String(process.env.OAUTH_GOOGLE_CLIENT_SECRET || '').trim();
@@ -87,6 +100,11 @@ const LEMON_VARIANT_ID_COMBO = safeString(process.env.LEMON_VARIANT_ID_COMBO || 
 const LEMON_CHECKOUT_URL_BOURSE = safeString(process.env.LEMON_CHECKOUT_URL_BOURSE || '', 1024);
 const LEMON_CHECKOUT_URL_CRYPTO = safeString(process.env.LEMON_CHECKOUT_URL_CRYPTO || '', 1024);
 const LEMON_CHECKOUT_URL_COMBO = safeString(process.env.LEMON_CHECKOUT_URL_COMBO || '', 1024);
+const LEMON_AFFILIATE_EXTERNAL_ENABLED = parseBooleanEnv(process.env.LEMON_AFFILIATE_EXTERNAL_ENABLED, false);
+const PLAN_PRICE_BOURSE_EUR = Number(process.env.PLAN_PRICE_BOURSE_EUR || 29);
+const PLAN_PRICE_CRYPTO_EUR = Number(process.env.PLAN_PRICE_CRYPTO_EUR || 29);
+const PLAN_PRICE_COMBO_EUR = Number(process.env.PLAN_PRICE_COMBO_EUR || 49);
+const AFFILIATE_CRYPTO_COMMISSION_RATE = Number(process.env.AFFILIATE_CRYPTO_COMMISSION_RATE || 0.5);
 const STORE_DIR_MODE = 0o700;
 const STORE_FILE_MODE = 0o600;
 const CORS_ALLOWED_ORIGINS = String(ORIGIN || '')
@@ -146,6 +164,10 @@ const MARKET_CACHE_TTL_MS = Number(process.env.MARKET_CACHE_TTL_MS || 60 * 1000)
 const MARKET_REQUEST_TIMEOUT_MS = Number(process.env.MARKET_REQUEST_TIMEOUT_MS || 8000);
 const VIP_ACTIVITY_WINDOW_MINUTES = Number(process.env.VIP_ACTIVITY_WINDOW_MINUTES || 15);
 const X_FEED_MAX_ACCOUNTS = 40;
+const TRADE_SNAPSHOT_LIMIT = 730;
+const TRADE_SNAPSHOT_SUMMARY_LIMIT = 365;
+const DATE_KEY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_KEY_REGEX = /^\d{4}-\d{2}$/;
 const STOCK_WATCHLIST = [
   { symbol: 'SPY', name: 'SPDR S&P 500 ETF' },
   { symbol: 'QQQ', name: 'Invesco QQQ Trust' },
@@ -346,9 +368,45 @@ const MOCK_MARKET_ANALYSIS = `## Biais du jour
 - Baisser la taille si le spread s elargit.
 - Stop loss obligatoire sur chaque signal.
 `;
+const MOCK_MARKET_ANALYSIS_BOURSE = `## Biais Bourse du jour
+
+- Les indices restent sensibles aux publications macro et aux taux US.
+- On privilégie les entrées propres sur niveaux techniques, sans poursuite impulsive.
+- La gestion du risque reste stricte : invalidation claire avant chaque exécution.
+`;
+const MOCK_MARKET_ANALYSIS_CRYPTO = `## Biais Crypto du jour
+
+- BTC reste le baromètre principal de la session.
+- Les alts sont plus volatiles : taille réduite si le spread s'élargit.
+- Pas d'entrée sans plan clair (niveau d'invalidation + objectifs définis).
+`;
 
 const defaultDailyTrades = () => MOCK_DAILY_TRADES.map((trade) => ({ ...trade }));
 const defaultMarketAnalysis = () => MOCK_MARKET_ANALYSIS;
+const defaultMarketAnalyses = () => ({
+  bourse: MOCK_MARKET_ANALYSIS_BOURSE,
+  crypto: MOCK_MARKET_ANALYSIS_CRYPTO
+});
+const defaultTradeSnapshots = () => {
+  const trades = defaultDailyTrades();
+  const marketAnalysis = defaultMarketAnalysis();
+  const marketAnalyses = defaultMarketAnalyses();
+  const nowIso = new Date().toISOString();
+  const firstTradeDate = String(trades[0]?.heure || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || '';
+  const dateKey = DATE_KEY_REGEX.test(firstTradeDate) ? firstTradeDate : nowIso.slice(0, 10);
+  return [
+    {
+      id: `snapshot-${dateKey}-seed`,
+      dateKey,
+      monthKey: dateKey.slice(0, 7),
+      publishedAt: nowIso,
+      source: 'seed',
+      trades,
+      marketAnalysis,
+      marketAnalyses
+    }
+  ];
+};
 const defaultXFeedAccounts = () => DEFAULT_X_FEED_ACCOUNTS.map((entry) => ({ ...entry }));
 const defaultXFeed = () => ({
   mode: 'curated_manual',
@@ -370,7 +428,12 @@ const defaultBillingProfile = () => ({
   currentPeriodEnd: null,
   canceledAt: null,
   lastWebhookEvent: null,
-  lastWebhookAt: null
+  lastWebhookAt: null,
+  lastPaidAmount: null,
+  lastPaidCurrency: null,
+  lastPaymentAt: null,
+  lastPaymentChannel: null,
+  lastAffiliateCommissionEventKey: null
 });
 const normalizeLeadStatus = (value) => {
   const normalized = safeString(value, 32).toUpperCase();
@@ -412,6 +475,15 @@ const sanitizeLeadRecordForStore = (lead, index = 0) => {
 };
 const normalizeBillingProfile = (billing) => {
   const source = billing && typeof billing === 'object' && !Array.isArray(billing) ? billing : {};
+  const parsedLastPaidAmount = Number(source.lastPaidAmount);
+  const normalizedLastPaidAmount = Number.isFinite(parsedLastPaidAmount) && parsedLastPaidAmount > 0
+    ? Number(parsedLastPaidAmount.toFixed(2))
+    : null;
+  const normalizedLastPaidCurrency = safeString(source.lastPaidCurrency, 12)
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 8);
+  const normalizedLastPaymentChannel = safeString(source.lastPaymentChannel, 32).toUpperCase();
   return {
     provider: ['NONE', 'LEMON_SQUEEZY', 'MANUAL'].includes(String(source.provider || '').toUpperCase())
       ? String(source.provider || '').toUpperCase()
@@ -428,7 +500,14 @@ const normalizeBillingProfile = (billing) => {
     currentPeriodEnd: safeString(source.currentPeriodEnd, 64) || null,
     canceledAt: safeString(source.canceledAt, 64) || null,
     lastWebhookEvent: safeString(source.lastWebhookEvent, 80) || null,
-    lastWebhookAt: safeString(source.lastWebhookAt, 64) || null
+    lastWebhookAt: safeString(source.lastWebhookAt, 64) || null,
+    lastPaidAmount: normalizedLastPaidAmount,
+    lastPaidCurrency: normalizedLastPaidCurrency || null,
+    lastPaymentAt: safeString(source.lastPaymentAt, 64) || null,
+    lastPaymentChannel: ['CRYPTO_MANUAL', 'CARD_AUTO', 'UNKNOWN'].includes(normalizedLastPaymentChannel)
+      ? normalizedLastPaymentChannel
+      : null,
+    lastAffiliateCommissionEventKey: safeString(source.lastAffiliateCommissionEventKey, 191) || null
   };
 };
 const sanitizeXFeedAccountForStore = (entry, index = 0) => {
@@ -479,6 +558,72 @@ const normalizeSubscriptionStatus = (value, isAdmin = false) => {
 };
 
 const sanitizeReferralCode = (value) => safeString(value, 32).toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+const roundCurrencyAmount = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return Number(numeric.toFixed(2));
+};
+const parsePositiveCurrencyAmount = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 1_000_000) return null;
+  return Number(numeric.toFixed(2));
+};
+const sanitizeCurrencyCode = (value, fallback = 'EUR') => {
+  const normalized = safeString(value, 12)
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 8);
+  return normalized || fallback;
+};
+const resolvePlanReferencePriceEur = (planRaw) => {
+  const plan = normalizeSubscriptionPlan(planRaw, false);
+  if (plan === 'bourse') return PLAN_PRICE_BOURSE_EUR;
+  if (plan === 'crypto') return PLAN_PRICE_CRYPTO_EUR;
+  if (plan === 'combo') return PLAN_PRICE_COMBO_EUR;
+  return 0;
+};
+const resolveReferralCommissionModel = (billingProvider) => {
+  if (billingProvider === 'MANUAL') return 'CRYPTO_50_PERCENT_MANUAL';
+  if (billingProvider === 'LEMON_SQUEEZY') {
+    return LEMON_AFFILIATE_EXTERNAL_ENABLED ? 'LEMON_AFFILIATE_EXTERNAL' : 'LEMON_CARD_INTERNAL_DISABLED';
+  }
+  return 'NONE';
+};
+const resolveReferralPaymentChannel = (billingProfile) => {
+  const channel = safeString(billingProfile?.lastPaymentChannel, 32).toUpperCase();
+  if (['CRYPTO_MANUAL', 'CARD_AUTO', 'UNKNOWN'].includes(channel)) return channel;
+  const provider = safeString(billingProfile?.provider, 32).toUpperCase();
+  if (provider === 'MANUAL') return 'CRYPTO_MANUAL';
+  if (provider === 'LEMON_SQUEEZY') return 'CARD_AUTO';
+  return 'UNKNOWN';
+};
+const resolveReferralPaidAmount = (referredUser, billingProfile) => {
+  const directAmount = parsePositiveCurrencyAmount(billingProfile?.lastPaidAmount);
+  if (directAmount !== null) return directAmount;
+  return roundCurrencyAmount(resolvePlanReferencePriceEur(referredUser?.subscriptionPlan));
+};
+const buildAffiliateCommissionEventKey = (referredUser, options = {}) => {
+  const billing = normalizeBillingProfile(referredUser?.billing);
+  const explicitEventKey = safeString(options?.eventKey, 191);
+  if (explicitEventKey) return explicitEventKey;
+  const anchorDate = safeString(
+    billing.lastPaymentAt
+      || referredUser?.subscriptionUpdatedAt
+      || referredUser?.billing?.lastWebhookAt
+      || referredUser?.createdAt,
+    64
+  ) || new Date().toISOString();
+  const normalizedPlan = normalizeSubscriptionPlan(referredUser?.subscriptionPlan, false);
+  const amount = resolveReferralPaidAmount(referredUser, billing);
+  const source = safeString(options?.source, 48) || 'unknown';
+  const userId = safeString(referredUser?.id, 128) || normalizeEmail(referredUser?.email || '');
+  return safeString(`${source}:${userId}:${normalizedPlan}:${amount.toFixed(2)}:${anchorDate}`, 191);
+};
+const shouldAffiliateFollowUp = (referredUser, billingProvider) => {
+  if (billingProvider !== 'MANUAL') return false;
+  const status = normalizeSubscriptionStatus(referredUser?.subscriptionStatus, Boolean(referredUser?.isAdmin));
+  return status !== 'ACTIVE';
+};
 
 const ensureUserReferralCode = (store, user, forceRegenerate = false) => {
   if (!user || typeof user !== 'object') return '';
@@ -704,9 +849,18 @@ const defaultAffiliateProfile = (email, isAdmin = false) => {
           pseudo: 'trader.alpha@test.com',
           email: 'trader.alpha@test.com',
           subscriptionPlan: 'combo',
+          subscriptionStatus: 'ACTIVE',
           subscriptionActive: true,
-          commissionAmount: 15,
+          paymentProvider: 'MANUAL',
+          paymentChannel: 'CRYPTO_MANUAL',
+          commissionModel: 'CRYPTO_50_PERCENT_MANUAL',
+          commissionAmount: 24.5,
           commissionStatus: 'READY_TO_PAY',
+          followUpRequired: false,
+          paidAmount: 49,
+          paidCurrency: 'EUR',
+          lastPaymentAt: '2026-03-01T10:00:00.000Z',
+          updatedAt: '2026-03-01T10:00:00.000Z',
           joinedAt: '2026-03-01T10:00:00.000Z'
         },
         {
@@ -714,9 +868,18 @@ const defaultAffiliateProfile = (email, isAdmin = false) => {
           pseudo: 'sarah.vip@test.com',
           email: 'sarah.vip@test.com',
           subscriptionPlan: 'crypto',
+          subscriptionStatus: 'ACTIVE',
           subscriptionActive: true,
-          commissionAmount: 15,
+          paymentProvider: 'MANUAL',
+          paymentChannel: 'CRYPTO_MANUAL',
+          commissionModel: 'CRYPTO_50_PERCENT_MANUAL',
+          commissionAmount: 14.5,
           commissionStatus: 'PAID',
+          followUpRequired: false,
+          paidAmount: 29,
+          paidCurrency: 'EUR',
+          lastPaymentAt: '2026-02-20T10:00:00.000Z',
+          updatedAt: '2026-02-20T10:00:00.000Z',
           joinedAt: '2026-02-20T10:00:00.000Z'
         },
         {
@@ -724,16 +887,25 @@ const defaultAffiliateProfile = (email, isAdmin = false) => {
           pseudo: 'paul.lead@test.com',
           email: 'paul.lead@test.com',
           subscriptionPlan: 'bourse',
+          subscriptionStatus: 'PENDING_VERIFICATION',
           subscriptionActive: false,
+          paymentProvider: 'MANUAL',
+          paymentChannel: 'CRYPTO_MANUAL',
+          commissionModel: 'CRYPTO_50_PERCENT_MANUAL',
           commissionAmount: 0,
           commissionStatus: 'LOCKED',
+          followUpRequired: true,
+          paidAmount: 29,
+          paidCurrency: 'EUR',
+          lastPaymentAt: null,
+          updatedAt: '2026-03-10T10:00:00.000Z',
           joinedAt: '2026-03-10T10:00:00.000Z'
         }
       ],
       commissionHistory: [
         {
           id: 'comm-1',
-          amount: 15,
+          amount: 14.5,
           sourceUser: 'sarah.vip@test.com',
           dateCreated: '2026-02-21',
           status: 'PAID',
@@ -741,11 +913,11 @@ const defaultAffiliateProfile = (email, isAdmin = false) => {
         },
         {
           id: 'comm-2',
-          amount: 15,
+          amount: 24.5,
           sourceUser: 'trader.alpha@test.com',
           dateCreated: '2026-03-01',
           status: 'READY_TO_PAY',
-          payoutMethod: 'FIAT'
+          payoutMethod: 'CRYPTO'
         }
       ]
     };
@@ -897,6 +1069,8 @@ const createStore = (bootstrapAdmin = null) => {
     reviews: defaultReviews(),
     dailyTrades: defaultDailyTrades(),
     marketAnalysis: defaultMarketAnalysis(),
+    marketAnalyses: defaultMarketAnalyses(),
+    tradeSnapshots: defaultTradeSnapshots(),
     xFeed: defaultXFeed()
   };
 };
@@ -949,6 +1123,8 @@ const readStore = () => {
       referredByEmail: nextUser.referredByEmail,
       emailVerificationTokenHash: nextUser.emailVerificationTokenHash,
       emailVerificationExpiresAt: nextUser.emailVerificationExpiresAt,
+      passwordResetTokenHash: nextUser.passwordResetTokenHash,
+      passwordResetExpiresAt: nextUser.passwordResetExpiresAt,
       billing: nextUser.billing,
       onboardingCompletedAt: nextUser.onboardingCompletedAt
     });
@@ -967,6 +1143,14 @@ const readStore = () => {
     }
     if (typeof nextUser.emailVerificationExpiresAt !== 'string') {
       nextUser.emailVerificationExpiresAt = null;
+      mutated = true;
+    }
+    if (typeof nextUser.passwordResetTokenHash !== 'string') {
+      nextUser.passwordResetTokenHash = null;
+      mutated = true;
+    }
+    if (typeof nextUser.passwordResetExpiresAt !== 'string') {
+      nextUser.passwordResetExpiresAt = null;
       mutated = true;
     }
     if (typeof nextUser.emailVerifiedAt !== 'string') {
@@ -1047,6 +1231,8 @@ const readStore = () => {
       referredByEmail: nextUser.referredByEmail,
       emailVerificationTokenHash: nextUser.emailVerificationTokenHash,
       emailVerificationExpiresAt: nextUser.emailVerificationExpiresAt,
+      passwordResetTokenHash: nextUser.passwordResetTokenHash,
+      passwordResetExpiresAt: nextUser.passwordResetExpiresAt,
       billing: nextUser.billing,
       onboardingCompletedAt: nextUser.onboardingCompletedAt
     })) {
@@ -1071,6 +1257,41 @@ const readStore = () => {
       seenReferralCodes.add(finalCode);
     }
   });
+  const affiliateConsistencyBefore = JSON.stringify(
+    store.users.map((user) => ({
+      id: user.id,
+      referredByCode: user.referredByCode || null,
+      referredByUserId: user.referredByUserId || null,
+      referredByEmail: user.referredByEmail || null,
+      billing: normalizeBillingProfile(user.billing),
+      referrals: Array.isArray(user?.affiliateProfile?.referrals) ? user.affiliateProfile.referrals : [],
+      commissionHistory: Array.isArray(user?.affiliateProfile?.commissionHistory) ? user.affiliateProfile.commissionHistory : []
+    }))
+  );
+  store.users.forEach((user) => {
+    if (!user || typeof user !== 'object') return;
+    if (!safeString(user.referredByCode, 32) && !safeString(user.referredByUserId, 128) && !safeString(user.referredByEmail, 160)) {
+      return;
+    }
+    syncReferralAttributionForUser(store, user, {
+      source: 'store_consistency_rebuild',
+      recordCommissionEvent: false
+    });
+  });
+  const affiliateConsistencyAfter = JSON.stringify(
+    store.users.map((user) => ({
+      id: user.id,
+      referredByCode: user.referredByCode || null,
+      referredByUserId: user.referredByUserId || null,
+      referredByEmail: user.referredByEmail || null,
+      billing: normalizeBillingProfile(user.billing),
+      referrals: Array.isArray(user?.affiliateProfile?.referrals) ? user.affiliateProfile.referrals : [],
+      commissionHistory: Array.isArray(user?.affiliateProfile?.commissionHistory) ? user.affiliateProfile.commissionHistory : []
+    }))
+  );
+  if (affiliateConsistencyBefore !== affiliateConsistencyAfter) {
+    mutated = true;
+  }
   if (!store.sessions || typeof store.sessions !== 'object' || Array.isArray(store.sessions)) {
     store.sessions = {};
     mutated = true;
@@ -1094,8 +1315,8 @@ const readStore = () => {
       const createdAt = safeString(sessionValue.createdAt, 64) || new Date().toISOString();
       const updatedAt = safeString(sessionValue.updatedAt, 64) || createdAt;
       const lastRotatedAt = safeString(sessionValue.lastRotatedAt, 64) || createdAt;
-      const expiresAt = safeString(sessionValue.expiresAt, 64) || new Date(nowMs + SESSION_IDLE_TTL_MS).toISOString();
-      const absoluteExpiresAt = safeString(sessionValue.absoluteExpiresAt, 64) || new Date(nowMs + SESSION_MAX_TTL_MS).toISOString();
+      const expiresAt = safeString(sessionValue.expiresAt, 64) || new Date(nowMs + EFFECTIVE_SESSION_IDLE_TTL_MS).toISOString();
+      const absoluteExpiresAt = safeString(sessionValue.absoluteExpiresAt, 64) || new Date(nowMs + EFFECTIVE_SESSION_MAX_TTL_MS).toISOString();
       const revokedAt = safeString(sessionValue.revokedAt, 64) || null;
       const revokedReason = safeString(sessionValue.revokedReason, 64) || null;
       const expiresAtMs = Date.parse(expiresAt);
@@ -1105,8 +1326,8 @@ const readStore = () => {
         revokedAt
         || !Number.isFinite(expiresAtMs)
         || !Number.isFinite(absoluteExpiresAtMs)
-        || nowMs >= expiresAtMs
-        || nowMs >= absoluteExpiresAtMs
+        || (!SESSION_PERSISTENT_LOGIN && nowMs >= expiresAtMs)
+        || (!SESSION_PERSISTENT_LOGIN && nowMs >= absoluteExpiresAtMs)
       ) {
         mutated = true;
         continue;
@@ -1212,6 +1433,35 @@ const readStore = () => {
     store.marketAnalysis = defaultMarketAnalysis();
     mutated = true;
   }
+  const normalizedStoreMarketAnalyses = sanitizeMarketAnalyses(store.marketAnalyses, store.marketAnalysis);
+  if (JSON.stringify(store.marketAnalyses || {}) !== JSON.stringify(normalizedStoreMarketAnalyses)) {
+    store.marketAnalyses = normalizedStoreMarketAnalyses;
+    mutated = true;
+  }
+  if (!Array.isArray(store.tradeSnapshots)) {
+    store.tradeSnapshots = [];
+    mutated = true;
+  }
+  const normalizedTradeSnapshots = store.tradeSnapshots
+    .map((snapshot, index) => sanitizeTradeSnapshot(snapshot, index))
+    .filter(Boolean);
+  if (!normalizedTradeSnapshots.length) {
+    normalizedTradeSnapshots.push({
+      id: `snapshot-${crypto.randomUUID()}`,
+      dateKey: inferTradeSnapshotDateKey(store.dailyTrades, new Date().toISOString()),
+      monthKey: inferTradeSnapshotDateKey(store.dailyTrades, new Date().toISOString()).slice(0, 7),
+      publishedAt: new Date().toISOString(),
+      source: 'legacy_backfill',
+      trades: store.dailyTrades,
+      marketAnalysis: store.marketAnalysis,
+      marketAnalyses: store.marketAnalyses
+    });
+  }
+  const sortedTradeSnapshots = sortTradeSnapshotsDesc(normalizedTradeSnapshots).slice(0, TRADE_SNAPSHOT_LIMIT);
+  if (JSON.stringify(store.tradeSnapshots) !== JSON.stringify(sortedTradeSnapshots)) {
+    store.tradeSnapshots = sortedTradeSnapshots;
+    mutated = true;
+  }
   if (!store.xFeed || typeof store.xFeed !== 'object' || Array.isArray(store.xFeed)) {
     store.xFeed = defaultXFeed();
     mutated = true;
@@ -1298,6 +1548,9 @@ const validateRuntimeConfig = () => {
   if (!Number.isInteger(SESSION_ROTATION_MINUTES) || SESSION_ROTATION_MINUTES < 5 || SESSION_ROTATION_MINUTES > 1440) {
     throw new Error(`Invalid SESSION_ROTATION_MINUTES value: ${SESSION_ROTATION_MINUTES}`);
   }
+  if (!Number.isInteger(PERSISTENT_SESSION_TTL_DAYS) || PERSISTENT_SESSION_TTL_DAYS < 30 || PERSISTENT_SESSION_TTL_DAYS > 36500) {
+    throw new Error(`Invalid PERSISTENT_SESSION_TTL_DAYS value: ${PERSISTENT_SESSION_TTL_DAYS}`);
+  }
   if (!Number.isInteger(RATE_LIMIT_WINDOW_MS) || RATE_LIMIT_WINDOW_MS < 1000 || RATE_LIMIT_WINDOW_MS > 24 * 60 * 60 * 1000) {
     throw new Error(`Invalid RATE_LIMIT_WINDOW_MS value: ${RATE_LIMIT_WINDOW_MS}`);
   }
@@ -1324,6 +1577,9 @@ const validateRuntimeConfig = () => {
   }
   if (!Number.isInteger(EMAIL_VERIFY_TOKEN_TTL_HOURS) || EMAIL_VERIFY_TOKEN_TTL_HOURS < 1 || EMAIL_VERIFY_TOKEN_TTL_HOURS > 168) {
     throw new Error(`Invalid EMAIL_VERIFY_TOKEN_TTL_HOURS value: ${EMAIL_VERIFY_TOKEN_TTL_HOURS}`);
+  }
+  if (!Number.isInteger(PASSWORD_RESET_TOKEN_TTL_HOURS) || PASSWORD_RESET_TOKEN_TTL_HOURS < 1 || PASSWORD_RESET_TOKEN_TTL_HOURS > 24) {
+    throw new Error(`Invalid PASSWORD_RESET_TOKEN_TTL_HOURS value: ${PASSWORD_RESET_TOKEN_TTL_HOURS}`);
   }
   if (!Number.isInteger(OAUTH_STATE_TTL_MINUTES) || OAUTH_STATE_TTL_MINUTES < 3 || OAUTH_STATE_TTL_MINUTES > 60) {
     throw new Error(`Invalid OAUTH_STATE_TTL_MINUTES value: ${OAUTH_STATE_TTL_MINUTES}`);
@@ -1368,6 +1624,13 @@ const validateRuntimeConfig = () => {
   if (EMAIL_PROVIDER === 'resend' && !EMAIL_FROM.includes('@')) {
     throw new Error('EMAIL_FROM must be a valid sender identity when EMAIL_PROVIDER=resend.');
   }
+  const hubspotPartiallyConfigured = Boolean(HUBSPOT_PORTAL_ID || HUBSPOT_SIGNUP_FORM_GUID || HUBSPOT_PRIVATE_APP_TOKEN);
+  if (hubspotPartiallyConfigured && (!HUBSPOT_PORTAL_ID || !HUBSPOT_SIGNUP_FORM_GUID)) {
+    throw new Error('HUBSPOT_PORTAL_ID and HUBSPOT_SIGNUP_FORM_GUID are both required when HubSpot sync is configured.');
+  }
+  if (!Number.isFinite(HUBSPOT_SYNC_TIMEOUT_MS) || HUBSPOT_SYNC_TIMEOUT_MS < 2000 || HUBSPOT_SYNC_TIMEOUT_MS > 30000) {
+    throw new Error(`Invalid HUBSPOT_SYNC_TIMEOUT_MS value: ${HUBSPOT_SYNC_TIMEOUT_MS}`);
+  }
   const googleConfigured = Boolean(OAUTH_GOOGLE_CLIENT_ID || OAUTH_GOOGLE_CLIENT_SECRET);
   if (googleConfigured && (!OAUTH_GOOGLE_CLIENT_ID || !OAUTH_GOOGLE_CLIENT_SECRET)) {
     throw new Error('Both OAUTH_GOOGLE_CLIENT_ID and OAUTH_GOOGLE_CLIENT_SECRET are required.');
@@ -1404,6 +1667,18 @@ const validateRuntimeConfig = () => {
   }
   if (IS_PRODUCTION_LIKE && ALLOW_DEV_SUBSCRIPTION_STUB) {
     throw new Error('ALLOW_DEV_SUBSCRIPTION_STUB is forbidden in production/staging.');
+  }
+  if (!Number.isFinite(PLAN_PRICE_BOURSE_EUR) || PLAN_PRICE_BOURSE_EUR <= 0 || PLAN_PRICE_BOURSE_EUR > 100000) {
+    throw new Error(`Invalid PLAN_PRICE_BOURSE_EUR value: ${PLAN_PRICE_BOURSE_EUR}`);
+  }
+  if (!Number.isFinite(PLAN_PRICE_CRYPTO_EUR) || PLAN_PRICE_CRYPTO_EUR <= 0 || PLAN_PRICE_CRYPTO_EUR > 100000) {
+    throw new Error(`Invalid PLAN_PRICE_CRYPTO_EUR value: ${PLAN_PRICE_CRYPTO_EUR}`);
+  }
+  if (!Number.isFinite(PLAN_PRICE_COMBO_EUR) || PLAN_PRICE_COMBO_EUR <= 0 || PLAN_PRICE_COMBO_EUR > 100000) {
+    throw new Error(`Invalid PLAN_PRICE_COMBO_EUR value: ${PLAN_PRICE_COMBO_EUR}`);
+  }
+  if (!Number.isFinite(AFFILIATE_CRYPTO_COMMISSION_RATE) || AFFILIATE_CRYPTO_COMMISSION_RATE < 0 || AFFILIATE_CRYPTO_COMMISSION_RATE > 1) {
+    throw new Error(`Invalid AFFILIATE_CRYPTO_COMMISSION_RATE value: ${AFFILIATE_CRYPTO_COMMISSION_RATE}`);
   }
 };
 
@@ -1444,6 +1719,8 @@ const createUser = (email, password, options = {}) => {
     emailVerifiedAt: options.isAdmin || options.emailVerified ? nowIso : null,
     emailVerificationTokenHash: null,
     emailVerificationExpiresAt: null,
+    passwordResetTokenHash: null,
+    passwordResetExpiresAt: null,
     authProviders: normalizeAuthProviders(options.authProviders),
     referredByCode: sanitizeReferralCode(options.referredByCode || ''),
     referredByUserId: safeString(options.referredByUserId, 128) || null,
@@ -1553,6 +1830,9 @@ const resolveRateLimitPolicy = (req, pathname) => {
     || pathname === '/api/auth/signup'
     || pathname === '/api/auth/social'
     || pathname === '/api/auth/resend-verification'
+    || pathname === '/api/auth/forgot-password'
+    || pathname === '/api/auth/reset-password'
+    || pathname === '/api/auth/delete-account'
   )) {
     return { key: 'auth', limit: RATE_LIMIT_MAX_AUTH };
   }
@@ -1696,7 +1976,7 @@ const getCookieSameSiteValue = () => {
 
 const buildSessionCookie = (token, absoluteExpiresAt) => {
   const absoluteMs = Date.parse(String(absoluteExpiresAt || ''));
-  const defaultMaxAgeSeconds = Math.floor(SESSION_MAX_TTL_MS / 1000);
+  const defaultMaxAgeSeconds = Math.floor(EFFECTIVE_SESSION_MAX_TTL_MS / 1000);
   const maxAgeSeconds = Number.isFinite(absoluteMs)
     ? Math.max(0, Math.floor((absoluteMs - Date.now()) / 1000))
     : defaultMaxAgeSeconds;
@@ -1740,8 +2020,8 @@ const createSession = (store, user, req) => {
     createdAt: nowIso,
     updatedAt: nowIso,
     lastRotatedAt: nowIso,
-    expiresAt: new Date(now + SESSION_IDLE_TTL_MS).toISOString(),
-    absoluteExpiresAt: new Date(now + SESSION_MAX_TTL_MS).toISOString(),
+    expiresAt: new Date(now + EFFECTIVE_SESSION_IDLE_TTL_MS).toISOString(),
+    absoluteExpiresAt: new Date(now + EFFECTIVE_SESSION_MAX_TTL_MS).toISOString(),
     revokedAt: null,
     revokedReason: null,
     ipAddress: safeString(req.socket?.remoteAddress, 128) || null,
@@ -1752,6 +2032,9 @@ const createSession = (store, user, req) => {
 };
 
 const isSessionExpired = (session, nowMs = Date.now()) => {
+  if (SESSION_PERSISTENT_LOGIN) {
+    return !session || Boolean(session.revokedAt);
+  }
   const expiresAtMs = Date.parse(String(session?.expiresAt || ''));
   const absoluteExpiresAtMs = Date.parse(String(session?.absoluteExpiresAt || ''));
   if (!session || session.revokedAt) return true;
@@ -1814,7 +2097,10 @@ const resolveAuthContext = (store, req) => {
   let storeChanged = false;
   const nowIso = new Date(nowMs).toISOString();
   session.updatedAt = nowIso;
-  session.expiresAt = new Date(nowMs + SESSION_IDLE_TTL_MS).toISOString();
+  session.expiresAt = new Date(nowMs + EFFECTIVE_SESSION_IDLE_TTL_MS).toISOString();
+  if (SESSION_PERSISTENT_LOGIN) {
+    session.absoluteExpiresAt = new Date(nowMs + EFFECTIVE_SESSION_MAX_TTL_MS).toISOString();
+  }
   session.ipAddress = safeString(req.socket?.remoteAddress, 128) || null;
   session.userAgent = safeString(req.headers['user-agent'], 256) || null;
   storeChanged = true;
@@ -1840,6 +2126,90 @@ const resolveAuthContext = (store, req) => {
     storeChanged,
     responseHeaders
   };
+};
+
+const revokeAllSessionsForUser = (store, userId) => {
+  if (!store?.sessions || typeof store.sessions !== 'object') return false;
+  let changed = false;
+  Object.entries(store.sessions).forEach(([tokenHash, session]) => {
+    if (!session || typeof session !== 'object') return;
+    if (safeString(session.userId, 128) !== safeString(userId, 128)) return;
+    delete store.sessions[tokenHash];
+    changed = true;
+  });
+  return changed;
+};
+
+const hasLinkedOAuthProvider = (user) => {
+  const providers = user?.authProviders;
+  if (!providers || typeof providers !== 'object' || Array.isArray(providers)) {
+    return false;
+  }
+  return Object.values(providers).some((providerUserId) => Boolean(safeString(providerUserId, 191)));
+};
+
+const removeUserDataFromStore = (store, user) => {
+  if (!store || !user || typeof user !== 'object') return false;
+  const userId = safeString(user.id, 128);
+  const normalizedEmail = normalizeEmail(user.email || '');
+  if (!userId || !normalizedEmail) return false;
+
+  let changed = false;
+  const previousUsersCount = Array.isArray(store.users) ? store.users.length : 0;
+  if (Array.isArray(store.users)) {
+    store.users = store.users.filter((candidate) => safeString(candidate?.id, 128) !== userId);
+    if (store.users.length !== previousUsersCount) changed = true;
+  }
+
+  if (revokeAllSessionsForUser(store, userId)) {
+    changed = true;
+  }
+
+  if (Array.isArray(store.leads)) {
+    const previousLeadsCount = store.leads.length;
+    store.leads = store.leads.filter((lead) => {
+      const leadUserId = safeString(lead?.userId, 128);
+      const leadEmail = normalizeEmail(lead?.email || '');
+      return leadUserId !== userId && leadEmail !== normalizedEmail;
+    });
+    if (store.leads.length !== previousLeadsCount) changed = true;
+  }
+
+  if (Array.isArray(store.users)) {
+    store.users.forEach((candidate) => {
+      if (!candidate || typeof candidate !== 'object') return;
+
+      if (safeString(candidate.referredByUserId, 128) === userId) {
+        candidate.referredByUserId = null;
+        candidate.referredByEmail = null;
+        candidate.referredByCode = null;
+        changed = true;
+      }
+
+      const profile = candidate.affiliateProfile;
+      if (!profile || typeof profile !== 'object' || Array.isArray(profile)) return;
+
+      if (Array.isArray(profile.referrals)) {
+        const previousReferralsCount = profile.referrals.length;
+        profile.referrals = profile.referrals.filter((referral) => {
+          const referralEmail = normalizeEmail(referral?.email || referral?.pseudo || '');
+          return referralEmail !== normalizedEmail;
+        });
+        if (profile.referrals.length !== previousReferralsCount) changed = true;
+      }
+
+      if (Array.isArray(profile.commissionHistory)) {
+        const previousCommissionCount = profile.commissionHistory.length;
+        profile.commissionHistory = profile.commissionHistory.filter((commission) => {
+          const sourceNormalized = normalizeEmail(commission?.sourceUser || '');
+          return sourceNormalized !== normalizedEmail;
+        });
+        if (profile.commissionHistory.length !== previousCommissionCount) changed = true;
+      }
+    });
+  }
+
+  return changed;
 };
 
 const requireAuthenticated = (store, req, res) => {
@@ -1896,6 +2266,127 @@ const sanitizeDailyTrade = (trade) => {
     return null;
   }
   return { actif, market, direction, entree, sl, tp, taille, raison, heure };
+};
+
+const sanitizeMarketAnalyses = (value, fallbackGlobalAnalysis = '') => {
+  const defaults = defaultMarketAnalyses();
+  const fallbackGlobal = sanitizeText(fallbackGlobalAnalysis, 12000);
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const bourse = sanitizeText(raw.bourse || raw.BOURSE, 12000);
+  const crypto = sanitizeText(raw.crypto || raw.CRYPTO, 12000);
+  return {
+    bourse: bourse || fallbackGlobal || defaults.bourse,
+    crypto: crypto || fallbackGlobal || defaults.crypto
+  };
+};
+
+const normalizeDateKey = (value) => {
+  const candidate = safeString(value, 16).slice(0, 10);
+  if (!DATE_KEY_REGEX.test(candidate)) return '';
+  const parsedMs = Date.parse(`${candidate}T00:00:00.000Z`);
+  return Number.isFinite(parsedMs) ? candidate : '';
+};
+
+const normalizeMonthKey = (value) => {
+  const candidate = safeString(value, 16).slice(0, 7);
+  if (!MONTH_KEY_REGEX.test(candidate)) return '';
+  const parsedMs = Date.parse(`${candidate}-01T00:00:00.000Z`);
+  return Number.isFinite(parsedMs) ? candidate : '';
+};
+
+const dateKeyFromIso = (value, fallback = '') => {
+  const parsedMs = Date.parse(String(value || ''));
+  if (!Number.isFinite(parsedMs)) return normalizeDateKey(fallback);
+  return new Date(parsedMs).toISOString().slice(0, 10);
+};
+
+const extractDateKeyFromTradeHour = (value) => {
+  const matched = safeString(value, 64).match(/^(\d{4}-\d{2}-\d{2})/);
+  if (!matched) return '';
+  return normalizeDateKey(matched[1]);
+};
+
+const inferTradeSnapshotDateKey = (trades, fallbackIso = '') => {
+  const candidates = Array.isArray(trades)
+    ? trades
+      .map((trade) => extractDateKeyFromTradeHour(trade?.heure))
+      .filter(Boolean)
+    : [];
+  if (candidates.length) {
+    return candidates.sort((a, b) => b.localeCompare(a))[0];
+  }
+  return dateKeyFromIso(fallbackIso, new Date().toISOString().slice(0, 10));
+};
+
+const sanitizeTradeSnapshot = (snapshot, index = 0) => {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+  const trades = Array.isArray(snapshot.trades)
+    ? snapshot.trades.map((trade) => sanitizeDailyTrade(trade)).filter(Boolean).slice(0, 30)
+    : [];
+  const marketAnalysis = sanitizeText(snapshot.marketAnalysis, 12000) || defaultMarketAnalysis();
+  const marketAnalyses = sanitizeMarketAnalyses(snapshot.marketAnalyses, marketAnalysis);
+  const rawDateKey = normalizeDateKey(snapshot.dateKey || snapshot.date);
+  const fallbackDateKey = inferTradeSnapshotDateKey(trades, snapshot.publishedAt || snapshot.updatedAt || new Date().toISOString());
+  const dateKey = rawDateKey || fallbackDateKey;
+  if (!dateKey) return null;
+  const monthKey = normalizeMonthKey(snapshot.monthKey) || dateKey.slice(0, 7);
+  const publishedAtIso = (() => {
+    const parsedMs = Date.parse(String(snapshot.publishedAt || snapshot.updatedAt || ''));
+    if (Number.isFinite(parsedMs)) return new Date(parsedMs).toISOString();
+    return `${dateKey}T00:00:00.000Z`;
+  })();
+  const id = safeString(snapshot.id, 120) || `snapshot-${dateKey}-${index + 1}`;
+  return {
+    id,
+    dateKey,
+    monthKey,
+    publishedAt: publishedAtIso,
+    source: sanitizeText(snapshot.source, 32) || 'admin_patch',
+    trades,
+    marketAnalysis,
+    marketAnalyses
+  };
+};
+
+const sortTradeSnapshotsDesc = (snapshots) => (
+  [...(Array.isArray(snapshots) ? snapshots : [])].sort((a, b) => {
+    const dateCompare = safeString(b?.dateKey, 16).localeCompare(safeString(a?.dateKey, 16));
+    if (dateCompare !== 0) return dateCompare;
+    const publishedA = Date.parse(safeString(a?.publishedAt, 64));
+    const publishedB = Date.parse(safeString(b?.publishedAt, 64));
+    const safeA = Number.isFinite(publishedA) ? publishedA : 0;
+    const safeB = Number.isFinite(publishedB) ? publishedB : 0;
+    return safeB - safeA;
+  })
+);
+
+const buildTradeSnapshotSummary = (snapshot) => ({
+  id: safeString(snapshot?.id, 120),
+  dateKey: safeString(snapshot?.dateKey, 16),
+  monthKey: safeString(snapshot?.monthKey, 16),
+  publishedAt: safeString(snapshot?.publishedAt, 64) || null,
+  tradeCount: Array.isArray(snapshot?.trades) ? snapshot.trades.length : 0
+});
+
+const upsertTradeSnapshot = (store, rawSnapshot) => {
+  if (!store || typeof store !== 'object') return null;
+  if (!Array.isArray(store.tradeSnapshots)) {
+    store.tradeSnapshots = [];
+  }
+  const sanitizedSnapshot = sanitizeTradeSnapshot(rawSnapshot, store.tradeSnapshots.length);
+  if (!sanitizedSnapshot) return null;
+  const existingIndex = store.tradeSnapshots.findIndex((entry) => safeString(entry?.dateKey, 16) === sanitizedSnapshot.dateKey);
+  if (existingIndex >= 0) {
+    const previous = store.tradeSnapshots[existingIndex];
+    store.tradeSnapshots[existingIndex] = {
+      ...sanitizedSnapshot,
+      id: safeString(previous?.id, 120) || sanitizedSnapshot.id
+    };
+  } else {
+    store.tradeSnapshots.push(sanitizedSnapshot);
+  }
+  store.tradeSnapshots = sortTradeSnapshotsDesc(store.tradeSnapshots).slice(0, TRADE_SNAPSHOT_LIMIT);
+  return store.tradeSnapshots.find((entry) => safeString(entry?.dateKey, 16) === sanitizedSnapshot.dateKey) || sanitizedSnapshot;
 };
 
 const decodeXmlEntities = (value) => String(value || '')
@@ -2284,6 +2775,45 @@ const extractLemonEventPayload = (payload) => {
     || (planFromCustomData !== 'NONE' ? planFromCustomData : null)
     || 'NONE';
   const internalStatus = lemonStatusToInternalStatus(attributes?.status, eventName);
+  const amountCandidates = [
+    attributes?.subtotal,
+    attributes?.subtotal_usd,
+    attributes?.total,
+    attributes?.total_usd,
+    attributes?.price,
+    attributes?.first_order_item?.price,
+    attributes?.first_subscription_item?.price
+  ];
+  let paidAmount = null;
+  for (const candidate of amountCandidates) {
+    const parsed = Number(candidate);
+    if (!Number.isFinite(parsed) || parsed <= 0) continue;
+    const normalized = Number.isInteger(parsed) && parsed >= 1000
+      ? Number((parsed / 100).toFixed(2))
+      : Number(parsed.toFixed(2));
+    paidAmount = normalized;
+    break;
+  }
+  const paidCurrency = sanitizeCurrencyCode(
+    attributes?.currency
+      || attributes?.currency_code
+      || attributes?.billing_currency
+      || attributes?.first_order_item?.currency
+      || 'USD',
+    'USD'
+  );
+  const isPaymentEvent = [
+    'order_created',
+    'subscription_created',
+    'subscription_payment_success',
+    'subscription_payment_recovered'
+  ].includes(eventName);
+  const paymentAt = safeString(
+    attributes?.created_at
+      || attributes?.updated_at
+      || attributes?.renews_at,
+    64
+  ) || null;
   return {
     eventName,
     userId,
@@ -2304,7 +2834,11 @@ const extractLemonEventPayload = (payload) => {
       64
     ) || null,
     currentPeriodEnd: safeString(attributes?.renews_at || attributes?.ends_at || attributes?.trial_ends_at, 64) || null,
-    canceledAt: safeString(attributes?.cancelled_at || attributes?.ends_at, 64) || null
+    canceledAt: safeString(attributes?.cancelled_at || attributes?.ends_at, 64) || null,
+    paidAmount,
+    paidCurrency,
+    isPaymentEvent,
+    paymentAt
   };
 };
 
@@ -2323,6 +2857,18 @@ const applyLemonSubscriptionEventToUser = (user, lemonEvent) => {
   user.billing.canceledAt = lemonEvent.status === 'CANCELED' ? (lemonEvent.canceledAt || nowIso) : null;
   user.billing.lastWebhookEvent = lemonEvent.eventName || null;
   user.billing.lastWebhookAt = nowIso;
+  user.billing.lastPaymentChannel = 'CARD_AUTO';
+  if (parsePositiveCurrencyAmount(lemonEvent.paidAmount) !== null) {
+    user.billing.lastPaidAmount = parsePositiveCurrencyAmount(lemonEvent.paidAmount);
+    user.billing.lastPaidCurrency = sanitizeCurrencyCode(lemonEvent.paidCurrency || user.billing.lastPaidCurrency || 'USD', 'USD');
+  } else if (lemonEvent.isPaymentEvent && parsePositiveCurrencyAmount(user.billing.lastPaidAmount) === null) {
+    const fallbackPlanAmount = roundCurrencyAmount(resolvePlanReferencePriceEur(lemonEvent.plan || user.subscriptionPlan));
+    user.billing.lastPaidAmount = fallbackPlanAmount > 0 ? fallbackPlanAmount : user.billing.lastPaidAmount;
+    user.billing.lastPaidCurrency = sanitizeCurrencyCode(user.billing.lastPaidCurrency || 'USD', 'USD');
+  }
+  if (lemonEvent.isPaymentEvent) {
+    user.billing.lastPaymentAt = lemonEvent.paymentAt || nowIso;
+  }
 
   if (lemonEvent.plan && lemonEvent.plan !== 'NONE') {
     user.subscriptionPlan = lemonEvent.plan;
@@ -2481,7 +3027,44 @@ const computeLeadStatusFromUser = (user) => {
   return permissions.vipAccess ? 'VIP_ACTIVE' : 'REGISTERED';
 };
 
-const upsertAffiliateReferralForOwner = (ownerUser, referredUser) => {
+const maybeRecordAffiliateCommission = (ownerUser, referredUser, referralRecord, options = {}) => {
+  if (!ownerUser || !referredUser || !referralRecord) return;
+  if (!options.recordCommissionEvent) return;
+  if (referralRecord.commissionModel !== 'CRYPTO_50_PERCENT_MANUAL') return;
+  if (!referralRecord.subscriptionActive || referralRecord.commissionAmount <= 0) return;
+  if (!ownerUser.affiliateProfile || typeof ownerUser.affiliateProfile !== 'object' || Array.isArray(ownerUser.affiliateProfile)) {
+    ownerUser.affiliateProfile = defaultAffiliateProfile(ownerUser.email, Boolean(ownerUser.isAdmin));
+  }
+  if (!Array.isArray(ownerUser.affiliateProfile.commissionHistory)) {
+    ownerUser.affiliateProfile.commissionHistory = [];
+  }
+
+  const eventKey = buildAffiliateCommissionEventKey(referredUser, options);
+  const alreadyExists = ownerUser.affiliateProfile.commissionHistory.some(
+    (entry) => safeString(entry?.eventKey, 191) === eventKey
+  );
+  if (alreadyExists) return;
+
+  const nowIso = new Date().toISOString();
+  ownerUser.affiliateProfile.commissionHistory.unshift({
+    id: `comm-${crypto.randomUUID()}`,
+    amount: referralRecord.commissionAmount,
+    sourceUser: safeString(referredUser.email, 120),
+    dateCreated: nowIso.slice(0, 10),
+    status: 'READY_TO_PAY',
+    payoutMethod: 'CRYPTO',
+    eventKey,
+    source: safeString(options.source, 48) || 'manual_subscription_verify',
+    relatedReferralId: referralRecord.id,
+    createdAt: nowIso
+  });
+  ownerUser.affiliateProfile.commissionHistory = ownerUser.affiliateProfile.commissionHistory.slice(0, 300);
+
+  referredUser.billing = normalizeBillingProfile(referredUser.billing);
+  referredUser.billing.lastAffiliateCommissionEventKey = eventKey;
+};
+
+const upsertAffiliateReferralForOwner = (ownerUser, referredUser, options = {}) => {
   if (!ownerUser || !referredUser) return;
   if (!ownerUser.affiliateProfile || typeof ownerUser.affiliateProfile !== 'object' || Array.isArray(ownerUser.affiliateProfile)) {
     ownerUser.affiliateProfile = defaultAffiliateProfile(ownerUser.email, Boolean(ownerUser.isAdmin));
@@ -2496,16 +3079,37 @@ const upsertAffiliateReferralForOwner = (ownerUser, referredUser) => {
     (item) => normalizeEmail(item?.email || item?.pseudo || '') === referredEmail
   );
   const permissions = resolveUserPermissions(referredUser);
+  const billingProfile = normalizeBillingProfile(referredUser.billing);
+  const normalizedPlan = normalizeSubscriptionPlan(referredUser.subscriptionPlan, false);
+  const normalizedStatus = normalizeSubscriptionStatus(referredUser.subscriptionStatus, Boolean(referredUser.isAdmin));
+  const paymentProvider = billingProfile.provider;
+  const paymentChannel = resolveReferralPaymentChannel(billingProfile);
+  const commissionModel = resolveReferralCommissionModel(paymentProvider);
+  const paidAmount = resolveReferralPaidAmount(referredUser, billingProfile);
+  const commissionAmount = permissions.vipAccess && commissionModel === 'CRYPTO_50_PERCENT_MANUAL'
+    ? roundCurrencyAmount(paidAmount * AFFILIATE_CRYPTO_COMMISSION_RATE)
+    : 0;
+  const commissionStatus = permissions.vipAccess && commissionAmount > 0 ? 'READY_TO_PAY' : 'LOCKED';
+  const nowIso = new Date().toISOString();
   const nextReferral = {
     id: existingIndex >= 0
       ? safeString(ownerUser.affiliateProfile.referrals[existingIndex]?.id, 64) || `ref-${crypto.randomUUID()}`
       : `ref-${crypto.randomUUID()}`,
     pseudo: safeString(referredUser.email, 80),
     email: referredEmail,
-    subscriptionPlan: normalizeSubscriptionPlan(referredUser.subscriptionPlan, false),
+    subscriptionPlan: normalizedPlan,
+    subscriptionStatus: normalizedStatus,
     subscriptionActive: Boolean(permissions.vipAccess),
-    commissionAmount: permissions.vipAccess ? 15 : 0,
-    commissionStatus: permissions.vipAccess ? 'READY_TO_PAY' : 'LOCKED',
+    paymentProvider,
+    paymentChannel,
+    commissionModel,
+    commissionAmount,
+    commissionStatus,
+    followUpRequired: shouldAffiliateFollowUp(referredUser, paymentProvider),
+    paidAmount,
+    paidCurrency: sanitizeCurrencyCode(billingProfile.lastPaidCurrency || 'EUR'),
+    lastPaymentAt: safeString(billingProfile.lastPaymentAt, 64) || null,
+    updatedAt: nowIso,
     joinedAt: existingIndex >= 0
       ? safeString(ownerUser.affiliateProfile.referrals[existingIndex]?.joinedAt, 64) || new Date().toISOString()
       : new Date().toISOString()
@@ -2519,6 +3123,7 @@ const upsertAffiliateReferralForOwner = (ownerUser, referredUser) => {
   } else {
     ownerUser.affiliateProfile.referrals.unshift(nextReferral);
   }
+  maybeRecordAffiliateCommission(ownerUser, referredUser, nextReferral, options);
 };
 
 const resolveReferralAttribution = (store, rawReferralCode, referredEmail = '') => {
@@ -2541,7 +3146,7 @@ const resolveReferralAttribution = (store, rawReferralCode, referredEmail = '') 
   };
 };
 
-const syncReferralAttributionForUser = (store, user) => {
+const syncReferralAttributionForUser = (store, user, options = {}) => {
   if (!store || !user || typeof user !== 'object') return;
   const ownerId = safeString(user.referredByUserId, 128);
   const ownerById = ownerId
@@ -2557,7 +3162,7 @@ const syncReferralAttributionForUser = (store, user) => {
   user.referredByUserId = owner.id;
   user.referredByEmail = normalizeEmail(owner.email);
   user.referredByCode = ownerCode;
-  upsertAffiliateReferralForOwner(owner, user);
+  upsertAffiliateReferralForOwner(owner, user, options);
 };
 
 const upsertLeadFromEmail = (store, email, source = 'unknown', linkedUser = null, options = {}) => {
@@ -2636,6 +3241,68 @@ const buildCrmOverview = (store) => {
     return acc;
   }, {});
 
+  const affiliates = nonAdminUsers
+    .map((user) => {
+      const affiliateProfile = user?.affiliateProfile && typeof user.affiliateProfile === 'object' && !Array.isArray(user.affiliateProfile)
+        ? user.affiliateProfile
+        : defaultAffiliateProfile(user?.email, false);
+      const referralsRaw = Array.isArray(affiliateProfile.referrals) ? affiliateProfile.referrals : [];
+      const referrals = referralsRaw
+        .map((referral, index) => {
+          const pseudo = sanitizeText(referral?.pseudo, 80);
+          if (!pseudo) return null;
+          const subscriptionPlan = normalizeSubscriptionPlan(referral?.subscriptionPlan, false);
+          const subscriptionStatus = normalizeSubscriptionStatus(referral?.subscriptionStatus, false);
+          const paymentProvider = ['NONE', 'MANUAL', 'LEMON_SQUEEZY'].includes(safeString(referral?.paymentProvider, 32).toUpperCase())
+            ? safeString(referral?.paymentProvider, 32).toUpperCase()
+            : 'NONE';
+          const paymentChannel = ['CRYPTO_MANUAL', 'CARD_AUTO', 'UNKNOWN'].includes(safeString(referral?.paymentChannel, 32).toUpperCase())
+            ? safeString(referral?.paymentChannel, 32).toUpperCase()
+            : 'UNKNOWN';
+          const commissionModel = safeString(referral?.commissionModel, 64) || resolveReferralCommissionModel(paymentProvider);
+          const commissionAmount = Math.max(0, Number(referral?.commissionAmount || 0));
+          const commissionStatus = ['LOCKED', 'READY_TO_PAY', 'PAID'].includes(String(referral?.commissionStatus || '').toUpperCase())
+            ? String(referral?.commissionStatus).toUpperCase()
+            : 'LOCKED';
+          return {
+            id: safeString(referral?.id, 64) || `ref-${index + 1}`,
+            pseudo,
+            subscriptionPlan,
+            subscriptionStatus,
+            subscriptionActive: Boolean(referral?.subscriptionActive),
+            paymentProvider,
+            paymentChannel,
+            commissionModel,
+            commissionAmount,
+            commissionStatus,
+            followUpRequired: Boolean(referral?.followUpRequired),
+            paidAmount: Math.max(0, Number(referral?.paidAmount || 0)),
+            paidCurrency: sanitizeCurrencyCode(referral?.paidCurrency || 'EUR'),
+            lastPaymentAt: safeString(referral?.lastPaymentAt, 64) || null,
+            updatedAt: safeString(referral?.updatedAt, 64) || null,
+            joinedAt: safeString(referral?.joinedAt, 64) || null
+          };
+        })
+        .filter(Boolean);
+
+      if (!referrals.length) return null;
+      const activeReferrals = referrals.filter((referral) => referral.subscriptionActive).length;
+      const followUpRequiredCount = referrals.filter((referral) => referral.followUpRequired).length;
+      const totalCommissionAmount = referrals.reduce((sum, referral) => sum + Number(referral.commissionAmount || 0), 0);
+      return {
+        ownerUserId: safeString(user?.id, 128) || null,
+        ownerEmail: normalizeEmail(user?.email || ''),
+        referralCode: sanitizeReferralCode(affiliateProfile.referralCode) || null,
+        referralsCount: referrals.length,
+        activeReferralsCount: activeReferrals,
+        followUpRequiredCount,
+        totalCommissionAmount: Number(totalCommissionAmount.toFixed(2)),
+        referrals: referrals.slice(0, 500)
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.referralsCount - a.referralsCount || b.activeReferralsCount - a.activeReferralsCount);
+
   return {
     funnel: {
       leadsCaptured: leads.length,
@@ -2646,6 +3313,7 @@ const buildCrmOverview = (store) => {
       canceledUsers: canceled
     },
     plans: planBreakdown,
+    affiliates,
     leads: leads
       .slice()
       .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
@@ -2791,11 +3459,24 @@ const publicReferral = (referral) => ({
   id: safeString(referral?.id, 64) || `ref-${crypto.randomUUID()}`,
   pseudo: sanitizeText(referral?.pseudo, 80),
   subscriptionPlan: sanitizeText(referral?.subscriptionPlan, 32) || 'NONE',
+  subscriptionStatus: normalizeSubscriptionStatus(referral?.subscriptionStatus, false),
   subscriptionActive: Boolean(referral?.subscriptionActive),
+  paymentProvider: ['NONE', 'MANUAL', 'LEMON_SQUEEZY'].includes(safeString(referral?.paymentProvider, 32).toUpperCase())
+    ? safeString(referral?.paymentProvider, 32).toUpperCase()
+    : 'NONE',
+  paymentChannel: ['CRYPTO_MANUAL', 'CARD_AUTO', 'UNKNOWN'].includes(safeString(referral?.paymentChannel, 32).toUpperCase())
+    ? safeString(referral?.paymentChannel, 32).toUpperCase()
+    : 'UNKNOWN',
+  commissionModel: safeString(referral?.commissionModel, 64) || resolveReferralCommissionModel(referral?.paymentProvider),
   commissionAmount: Math.max(0, Number(referral?.commissionAmount || 0)),
   commissionStatus: ['LOCKED', 'READY_TO_PAY', 'PAID'].includes(String(referral?.commissionStatus || '').toUpperCase())
     ? String(referral.commissionStatus).toUpperCase()
     : 'LOCKED',
+  followUpRequired: Boolean(referral?.followUpRequired),
+  paidAmount: roundCurrencyAmount(referral?.paidAmount),
+  paidCurrency: sanitizeCurrencyCode(referral?.paidCurrency || 'EUR'),
+  lastPaymentAt: safeString(referral?.lastPaymentAt, 64) || null,
+  updatedAt: safeString(referral?.updatedAt, 64) || null,
   joinedAt: safeString(referral?.joinedAt, 64) || null
 });
 
@@ -2832,7 +3513,11 @@ const publicBilling = (billing) => {
     currentPeriodEnd: normalized.currentPeriodEnd,
     canceledAt: normalized.canceledAt,
     lastWebhookEvent: normalized.lastWebhookEvent,
-    lastWebhookAt: normalized.lastWebhookAt
+    lastWebhookAt: normalized.lastWebhookAt,
+    lastPaidAmount: normalized.lastPaidAmount,
+    lastPaidCurrency: normalized.lastPaidCurrency,
+    lastPaymentAt: normalized.lastPaymentAt,
+    lastPaymentChannel: normalized.lastPaymentChannel
   };
 };
 
@@ -3267,6 +3952,11 @@ const hashEmailVerificationToken = (token) => crypto
   .update(String(token || ''))
   .digest('hex');
 
+const hashPasswordResetToken = (token) => crypto
+  .createHmac('sha256', EFFECTIVE_EMAIL_TOKEN_SECRET)
+  .update(`reset:${String(token || '')}`)
+  .digest('hex');
+
 const issueEmailVerificationToken = (user) => {
   const rawToken = crypto.randomBytes(40).toString('base64url');
   user.emailVerificationTokenHash = hashEmailVerificationToken(rawToken);
@@ -3277,6 +3967,18 @@ const issueEmailVerificationToken = (user) => {
 const clearEmailVerificationToken = (user) => {
   user.emailVerificationTokenHash = null;
   user.emailVerificationExpiresAt = null;
+};
+
+const issuePasswordResetToken = (user) => {
+  const rawToken = crypto.randomBytes(40).toString('base64url');
+  user.passwordResetTokenHash = hashPasswordResetToken(rawToken);
+  user.passwordResetExpiresAt = new Date(Date.now() + (PASSWORD_RESET_TOKEN_TTL_HOURS * 60 * 60 * 1000)).toISOString();
+  return rawToken;
+};
+
+const clearPasswordResetToken = (user) => {
+  user.passwordResetTokenHash = null;
+  user.passwordResetExpiresAt = null;
 };
 
 const sendTransactionalEmail = async ({ to, subject, html, text }) => {
@@ -3318,23 +4020,158 @@ const sendVerificationEmail = async (user, rawToken) => {
   });
 };
 
+const buildStarterKitOnboardingEmailContent = () => {
+  const starterKitUrl = `${EFFECTIVE_PUBLIC_APP_URL.replace(/\/+$/, '')}/starter-kit`;
+  const module1Url = `${starterKitUrl}#module-1`;
+  const module2Url = `${starterKitUrl}#module-2`;
+  const starterVideoUrl = 'https://www.youtube.com/watch?v=8fH7Z5vFd0A';
+  return {
+    starterKitUrl,
+    module1Url,
+    module2Url,
+    starterVideoUrl
+  };
+};
+
 const sendWelcomeEmail = async (user) => {
+  const content = buildStarterKitOnboardingEmailContent();
   await sendTransactionalEmail({
     to: user.email,
-    subject: 'Bienvenue sur Black Papers',
-    text: "Bienvenue. Votre compte est prêt. Connectez-vous pour accéder à votre espace membre et à vos contenus VIP selon votre plan.",
-    html: '<p>Bienvenue sur <strong>Black Papers</strong>.</p><p>Votre compte est prêt. Connectez-vous pour accéder à votre espace membre et à vos contenus VIP selon votre plan.</p>'
+    subject: 'Bienvenue sur Black Papers - Starter Kit + onboarding',
+    text: [
+      'Bienvenue sur Black Papers.',
+      '',
+      'Voici votre onboarding de démarrage :',
+      `- Module 1 (jargon du trading) : ${content.module1Url}`,
+      `- Module 2 (choisir sa plateforme) : ${content.module2Url}`,
+      `- Vidéo Starter Kit : ${content.starterVideoUrl}`,
+      '',
+      `Accès Starter Kit : ${content.starterKitUrl}`
+    ].join('\n'),
+    html: [
+      '<p>Bienvenue sur <strong>Black Papers</strong>.</p>',
+      '<p>Voici votre onboarding de démarrage :</p>',
+      '<ul>',
+      `<li><a href="${content.module1Url}">Module 1 : jargon du trading</a></li>`,
+      `<li><a href="${content.module2Url}">Module 2 : choisir sa plateforme</a></li>`,
+      `<li><a href="${content.starterVideoUrl}">Vidéo Starter Kit</a></li>`,
+      '</ul>',
+      `<p>Accès Starter Kit : <a href="${content.starterKitUrl}">${content.starterKitUrl}</a></p>`
+    ].join('')
   });
 };
 
 const sendStarterKitEmail = async (email) => {
-  const starterKitUrl = `${EFFECTIVE_PUBLIC_APP_URL.replace(/\/+$/, '')}/starter-kit`;
+  const content = buildStarterKitOnboardingEmailContent();
   await sendTransactionalEmail({
     to: email,
-    subject: 'Votre Starter Kit Black Papers',
-    text: `Bonjour,\n\nVoici votre accès gratuit au Starter Kit:\n${starterKitUrl}\n\nVous pouvez commencer immédiatement, sans paiement.`,
-    html: `<p>Bonjour,</p><p>Voici votre accès gratuit au <strong>Starter Kit</strong> :</p><p><a href="${starterKitUrl}">${starterKitUrl}</a></p><p>Vous pouvez commencer immédiatement, sans paiement.</p>`
+    subject: 'Votre Starter Kit Black Papers + 2 modules offerts',
+    text: [
+      'Bonjour,',
+      '',
+      'Voici votre Starter Kit gratuit :',
+      `${content.starterKitUrl}`,
+      '',
+      'Vous recevez aussi les 2 premiers modules :',
+      `- Module 1 (jargon du trading) : ${content.module1Url}`,
+      `- Module 2 (choisir sa plateforme) : ${content.module2Url}`,
+      `- Vidéo Starter Kit : ${content.starterVideoUrl}`,
+      '',
+      'Vous pouvez commencer immédiatement, sans paiement.'
+    ].join('\n'),
+    html: [
+      '<p>Bonjour,</p>',
+      '<p>Voici votre accès gratuit au <strong>Starter Kit</strong> :</p>',
+      `<p><a href="${content.starterKitUrl}">${content.starterKitUrl}</a></p>`,
+      '<p>Vous recevez aussi les 2 premiers modules :</p>',
+      '<ul>',
+      `<li><a href="${content.module1Url}">Module 1 : jargon du trading</a></li>`,
+      `<li><a href="${content.module2Url}">Module 2 : choisir sa plateforme</a></li>`,
+      `<li><a href="${content.starterVideoUrl}">Vidéo Starter Kit</a></li>`,
+      '</ul>',
+      '<p>Vous pouvez commencer immédiatement, sans paiement.</p>'
+    ].join('')
   });
+};
+
+const sendPasswordResetEmail = async (user, rawToken) => {
+  const resetUrl = `${EFFECTIVE_PUBLIC_APP_URL.replace(/\/+$/, '')}/?reset_token=${encodeURIComponent(rawToken)}`;
+  await sendTransactionalEmail({
+    to: user.email,
+    subject: 'Réinitialisez votre mot de passe Black Papers',
+    text: `Bonjour,\n\nRéinitialisez votre mot de passe via ce lien: ${resetUrl}\n\nCe lien expire dans ${PASSWORD_RESET_TOKEN_TTL_HOURS} heure(s).`,
+    html: `<p>Bonjour,</p><p>Réinitialisez votre mot de passe en cliquant ici:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Ce lien expire dans ${PASSWORD_RESET_TOKEN_TTL_HOURS} heure(s).</p>`
+  });
+};
+
+const toHubSpotDateValue = (value) => {
+  const parsedMs = Date.parse(String(value || ''));
+  return String(Number.isFinite(parsedMs) ? parsedMs : Date.now());
+};
+
+const sendSignupToHubSpot = async (payload = {}) => {
+  if (!HUBSPOT_SIGNUP_SYNC_ENABLED) {
+    return { skipped: true, reason: 'hubspot_not_configured' };
+  }
+
+  const email = normalizeEmail(payload.email);
+  if (!email || !email.includes('@')) {
+    return { skipped: true, reason: 'invalid_email' };
+  }
+
+  const referredByEmail = normalizeEmail(payload.referredByEmail || '');
+  const referralCode = sanitizeReferralCode(payload.referralCode);
+  const referralOwnerEmail = normalizeEmail(payload.referralOwnerEmail || '');
+
+  const fields = [
+    { name: 'email', value: email },
+    { name: 'signup_date', value: toHubSpotDateValue(payload.createdAt) }
+  ];
+
+  if (referredByEmail) fields.push({ name: 'referred_by_email', value: referredByEmail });
+  if (referralCode) fields.push({ name: 'referral_code', value: referralCode });
+  if (referralOwnerEmail) fields.push({ name: 'referral_owner_email', value: referralOwnerEmail });
+  if (referralCode || referredByEmail || referralOwnerEmail) {
+    fields.push({ name: 'contact_role', value: 'filleul' });
+  }
+
+  const hubspotUtk = safeString(payload.hutk, 512).replace(/[^A-Za-z0-9._-]/g, '');
+  const pageUriRaw = safeString(payload.pageUri, 1024);
+  const pageUri = isValidHttpUrl(pageUriRaw)
+    ? pageUriRaw
+    : `${EFFECTIVE_PUBLIC_APP_URL.replace(/\/+$/, '')}/signup`;
+  const pageName = sanitizeText(payload.pageName || 'Signup', 120) || 'Signup';
+
+  const context = { pageUri, pageName };
+  if (hubspotUtk) {
+    context.hutk = hubspotUtk;
+  }
+
+  const endpointBase = HUBSPOT_PRIVATE_APP_TOKEN
+    ? 'https://api.hsforms.com/submissions/v3/integration/secure/submit'
+    : 'https://api.hsforms.com/submissions/v3/integration/submit';
+  const headers = { 'Content-Type': 'application/json' };
+  if (HUBSPOT_PRIVATE_APP_TOKEN) {
+    headers.Authorization = `Bearer ${HUBSPOT_PRIVATE_APP_TOKEN}`;
+  }
+  const submittedAt = Number(toHubSpotDateValue(payload.createdAt));
+
+  const response = await fetchWithTimeout(
+    `${endpointBase}/${HUBSPOT_PORTAL_ID}/${HUBSPOT_SIGNUP_FORM_GUID}`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ fields, context, submittedAt })
+    },
+    HUBSPOT_SYNC_TIMEOUT_MS
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`hubspot_submit_failed_${response.status}:${safeString(errorText, 240)}`);
+  }
+
+  return parseJsonSafely(response) || {};
 };
 
 const upsertOAuthUser = (store, provider, profile) => {
@@ -3432,7 +4269,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     applyLemonSubscriptionEventToUser(targetUser, lemonEvent);
-    syncReferralAttributionForUser(store, targetUser);
+    syncReferralAttributionForUser(store, targetUser, {
+      source: 'lemon_webhook',
+      recordCommissionEvent: false
+    });
     upsertLeadFromEmail(
       store,
       targetUser.email,
@@ -3475,17 +4315,98 @@ const server = http.createServer(async (req, res) => {
     if (!auth) return;
     const permissions = resolveUserPermissions(auth.user);
     if (!permissions.vipAccess) return json(res, 403, { error: 'subscription_required' }, auth.responseHeaders);
-    const sourceTrades = Array.isArray(store.dailyTrades) ? store.dailyTrades : defaultDailyTrades();
+    const requestedDateRaw = safeString(url.searchParams.get('date'), 16);
+    const requestedMonthRaw = safeString(url.searchParams.get('month'), 16);
+    const requestedDate = requestedDateRaw ? normalizeDateKey(requestedDateRaw) : '';
+    const requestedMonth = requestedMonthRaw ? normalizeMonthKey(requestedMonthRaw) : '';
+    if (requestedDateRaw && !requestedDate) {
+      return json(res, 400, { error: 'invalid_date_query' }, auth.responseHeaders);
+    }
+    if (requestedMonthRaw && !requestedMonth) {
+      return json(res, 400, { error: 'invalid_month_query' }, auth.responseHeaders);
+    }
+
+    if (!Array.isArray(store.tradeSnapshots) || !store.tradeSnapshots.length) {
+      upsertTradeSnapshot(store, {
+        dateKey: inferTradeSnapshotDateKey(store.dailyTrades, new Date().toISOString()),
+        publishedAt: new Date().toISOString(),
+        source: 'legacy_backfill',
+        trades: Array.isArray(store.dailyTrades) ? store.dailyTrades : defaultDailyTrades(),
+        marketAnalysis: typeof store.marketAnalysis === 'string' ? store.marketAnalysis : defaultMarketAnalysis()
+      });
+      writeStore(store);
+    }
+
+    const snapshots = sortTradeSnapshotsDesc(store.tradeSnapshots);
+    const selectedSnapshot = requestedDate
+      ? snapshots.find((entry) => entry.dateKey === requestedDate) || null
+      : requestedMonth
+        ? snapshots.find((entry) => entry.monthKey === requestedMonth) || null
+        : snapshots[0] || null;
+
+    const sourceTrades = Array.isArray(selectedSnapshot?.trades) ? selectedSnapshot.trades : [];
     const trades = sourceTrades.filter((trade) => {
       const market = normalizeTradeMarket(trade.market, trade.actif);
       if (market === 'CRYPTO') return permissions.canAccessCryptoSignals;
       return permissions.canAccessBourseSignals;
     });
+    const groupedTrades = {
+      bourse: trades.filter((trade) => normalizeTradeMarket(trade.market, trade.actif) === 'BOURSE'),
+      crypto: trades.filter((trade) => normalizeTradeMarket(trade.market, trade.actif) === 'CRYPTO')
+    };
+
+    const archiveSummary = snapshots
+      .slice(0, TRADE_SNAPSHOT_SUMMARY_LIMIT)
+      .map(buildTradeSnapshotSummary);
+
+    if (!selectedSnapshot) {
+      return json(res, 200, {
+        trades: [],
+        marketAnalysis: '## Archive indisponible\n\n- Aucun signal sauvegarde pour cette date ou ce mois.',
+        marketAnalyses: sanitizeMarketAnalyses(null, ''),
+        groupedTrades: {
+          bourse: [],
+          crypto: []
+        },
+        permissions,
+        updatedAt: new Date().toISOString(),
+        snapshot: null,
+        archive: {
+          totalSnapshots: snapshots.length,
+          availableSnapshots: archiveSummary
+        },
+        requestedDate: requestedDate || null,
+        requestedMonth: requestedMonth || null
+      }, auth.responseHeaders);
+    }
+
+    const marketAnalyses = sanitizeMarketAnalyses(selectedSnapshot.marketAnalyses, selectedSnapshot.marketAnalysis);
+    const marketAnalysis = (() => {
+      if (permissions.canAccessBourseSignals && !permissions.canAccessCryptoSignals) return marketAnalyses.bourse;
+      if (!permissions.canAccessBourseSignals && permissions.canAccessCryptoSignals) return marketAnalyses.crypto;
+      return `## Analyse Bourse\n\n${marketAnalyses.bourse}\n\n## Analyse Crypto\n\n${marketAnalyses.crypto}`;
+    })();
+
     return json(res, 200, {
       trades,
-      marketAnalysis: typeof store.marketAnalysis === 'string' ? store.marketAnalysis : defaultMarketAnalysis(),
+      groupedTrades,
+      marketAnalyses,
+      marketAnalysis,
       permissions,
-      updatedAt: new Date().toISOString()
+      updatedAt: safeString(selectedSnapshot.publishedAt, 64) || new Date().toISOString(),
+      snapshot: {
+        id: selectedSnapshot.id,
+        dateKey: selectedSnapshot.dateKey,
+        monthKey: selectedSnapshot.monthKey,
+        publishedAt: selectedSnapshot.publishedAt,
+        isHistorical: Boolean(requestedDate || requestedMonth)
+      },
+      archive: {
+        totalSnapshots: snapshots.length,
+        availableSnapshots: archiveSummary
+      },
+      requestedDate: requestedDate || null,
+      requestedMonth: requestedMonth || null
     }, auth.responseHeaders);
   }
 
@@ -3810,6 +4731,11 @@ const server = http.createServer(async (req, res) => {
     const email = sanitizeEmail(body.email);
     const password = sanitizePassword(body.password);
     const referralCode = sanitizeReferralCode(body.referralCode);
+    const hubspotContext = {
+      hutk: safeString(body.hutk, 512),
+      pageUri: safeString(body.pageUri, 1024),
+      pageName: sanitizeText(body.pageName || 'Signup', 120) || 'Signup'
+    };
     if (!email || !email.includes('@') || password.length < 8) {
       return json(res, 400, { error: 'invalid_credentials' });
     }
@@ -3827,7 +4753,10 @@ const server = http.createServer(async (req, res) => {
       user.referredByCode = referralAttribution.referralCode;
       user.referredByUserId = referralAttribution.owner.id;
       user.referredByEmail = referralAttribution.referralOwnerEmail;
-      upsertAffiliateReferralForOwner(referralAttribution.owner, user);
+      upsertAffiliateReferralForOwner(referralAttribution.owner, user, {
+        source: 'signup',
+        recordCommissionEvent: false
+      });
     }
     upsertLeadFromEmail(
       store,
@@ -3841,6 +4770,18 @@ const server = http.createServer(async (req, res) => {
     );
     const createdSession = createSession(store, user, req);
     writeStore(store);
+    sendSignupToHubSpot({
+      email: user.email,
+      createdAt: user.createdAt,
+      referredByEmail: user.referredByEmail,
+      referralCode: user.referredByCode,
+      referralOwnerEmail: referralAttribution?.referralOwnerEmail || user.referredByEmail,
+      hutk: hubspotContext.hutk,
+      pageUri: hubspotContext.pageUri,
+      pageName: hubspotContext.pageName
+    }).catch((error) => {
+      console.warn(`[CRM] HubSpot signup sync failed for ${user.email}: ${safeString(error?.message, 160) || 'unknown_error'}`);
+    });
     sendVerificationEmail(user, verificationToken).catch((error) => {
       console.warn(`[AUTH] verification email delivery failed for ${user.email}: ${safeString(error?.message, 120) || 'unknown_error'}`);
     });
@@ -3879,6 +4820,79 @@ const server = http.createServer(async (req, res) => {
       res,
       200,
       {
+        user: publicUser(user),
+        session: {
+          expiresAt: createdSession.session.expiresAt,
+          absoluteExpiresAt: createdSession.session.absoluteExpiresAt
+        }
+      },
+      { 'Set-Cookie': buildSessionCookie(createdSession.token, createdSession.session.absoluteExpiresAt) }
+    );
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/auth/forgot-password') {
+    const body = await parseBodyOrFail(req, res);
+    if (!body) return;
+    const email = sanitizeEmail(body.email);
+    if (!email || !email.includes('@')) {
+      return json(res, 200, { ok: true, sent: true });
+    }
+
+    const store = readStore();
+    const user = store.users.find((candidate) => candidate.email === email) || null;
+    if (!user) {
+      return json(res, 200, { ok: true, sent: true });
+    }
+
+    const resetToken = issuePasswordResetToken(user);
+    writeStore(store);
+    sendPasswordResetEmail(user, resetToken).catch((error) => {
+      console.warn(`[AUTH] password reset email delivery failed for ${user.email}: ${safeString(error?.message, 120) || 'unknown_error'}`);
+    });
+
+    return json(res, 200, { ok: true, sent: true });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/auth/reset-password') {
+    const body = await parseBodyOrFail(req, res);
+    if (!body) return;
+    const rawToken = safeString(body.token, 512);
+    const newPassword = sanitizePassword(body.newPassword || body.password);
+    if (!rawToken || newPassword.length < 8) {
+      return json(res, 400, { error: 'invalid_reset_payload' });
+    }
+
+    const store = readStore();
+    const tokenHash = hashPasswordResetToken(rawToken);
+    const user = store.users.find((candidate) => candidate.passwordResetTokenHash === tokenHash) || null;
+    if (!user) {
+      return json(res, 400, { error: 'reset_token_invalid' });
+    }
+
+    const expiresAtMs = Date.parse(String(user.passwordResetExpiresAt || ''));
+    if (!Number.isFinite(expiresAtMs) || Date.now() >= expiresAtMs) {
+      clearPasswordResetToken(user);
+      writeStore(store);
+      return json(res, 400, { error: 'reset_token_expired' });
+    }
+
+    if (verifyPassword(newPassword, user.passwordHash)) {
+      return json(res, 400, { error: 'password_unchanged' });
+    }
+
+    user.passwordHash = hashPassword(newPassword);
+    clearPasswordResetToken(user);
+    applyUserAccessConsistency(user);
+    revokeAllSessionsForUser(store, user.id);
+    upsertLeadFromEmail(store, user.email, 'password_reset', user);
+
+    const createdSession = createSession(store, user, req);
+    writeStore(store);
+    return json(
+      res,
+      200,
+      {
+        ok: true,
         user: publicUser(user),
         session: {
           expiresAt: createdSession.session.expiresAt,
@@ -3957,6 +4971,40 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true }, { 'Set-Cookie': buildClearSessionCookie() });
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/auth/delete-account') {
+    const store = readStore();
+    const auth = requireAuthenticated(store, req, res);
+    if (!auth) return;
+    if (auth.user.isAdmin) {
+      return json(res, 403, { error: 'admin_delete_forbidden' }, auth.responseHeaders);
+    }
+
+    const body = await parseBodyOrFail(req, res, auth.responseHeaders);
+    if (!body) return;
+    const confirmText = sanitizeText(body.confirmText, 32).toUpperCase();
+    const confirmEmail = sanitizeEmail(body.email);
+    const password = sanitizePassword(body.password);
+
+    if (confirmText !== 'SUPPRIMER') {
+      return json(res, 400, { error: 'delete_confirmation_invalid' }, auth.responseHeaders);
+    }
+    if (!confirmEmail || confirmEmail !== auth.user.email) {
+      return json(res, 400, { error: 'delete_email_mismatch' }, auth.responseHeaders);
+    }
+
+    const oauthAccount = hasLinkedOAuthProvider(auth.user);
+    if (!oauthAccount && !verifyPassword(password, auth.user.passwordHash)) {
+      return json(res, 401, { error: 'invalid_credentials' }, auth.responseHeaders);
+    }
+
+    const deleted = removeUserDataFromStore(store, auth.user);
+    if (!deleted) {
+      return json(res, 500, { error: 'account_delete_failed' }, auth.responseHeaders);
+    }
+    writeStore(store);
+    return json(res, 200, { ok: true, deleted: true }, { ...auth.responseHeaders, 'Set-Cookie': buildClearSessionCookie() });
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/subscription/checkout') {
     const body = await parseBodyOrFail(req, res);
     if (!body) return;
@@ -3997,7 +5045,10 @@ const server = http.createServer(async (req, res) => {
       user.subscriptionStatus = user.isAdmin ? 'ADMIN' : 'PENDING_VERIFICATION';
       user.subscriptionUpdatedAt = new Date().toISOString();
       applyUserAccessConsistency(user);
-      syncReferralAttributionForUser(store, user);
+      syncReferralAttributionForUser(store, user, {
+        source: 'checkout_started',
+        recordCommissionEvent: false
+      });
       upsertLeadFromEmail(store, user.email, 'checkout_started', user, {
         referralCode: user.referredByCode || '',
         referralOwnerEmail: user.referredByEmail || ''
@@ -4031,24 +5082,54 @@ const server = http.createServer(async (req, res) => {
       return json(res, 400, { error: 'invalid_plan' });
     }
 
+    const providedPaidAmount = parsePositiveCurrencyAmount(
+      body?.paidAmount ?? body?.amountPaid ?? body?.amount ?? null
+    );
+    const providedPaidCurrency = sanitizeCurrencyCode(body?.paidCurrency || body?.currency || 'EUR');
+    const nowIso = new Date().toISOString();
     const isDevStubActive = ALLOW_DEV_SUBSCRIPTION_STUB && !IS_PRODUCTION_LIKE;
     user.subscriptionPlan = normalizeSubscriptionPlan(requestedPlan, false);
-    user.subscriptionUpdatedAt = new Date().toISOString();
+    user.subscriptionUpdatedAt = nowIso;
     user.billing = normalizeBillingProfile(user.billing);
     user.billing.provider = 'MANUAL';
-    user.billing.currentPeriodStart = user.billing.currentPeriodStart || new Date().toISOString();
+    user.billing.currentPeriodStart = user.billing.currentPeriodStart || nowIso;
     user.billing.lastWebhookEvent = 'manual_verification';
-    user.billing.lastWebhookAt = new Date().toISOString();
+    user.billing.lastWebhookAt = nowIso;
+    user.billing.lastPaymentChannel = 'CRYPTO_MANUAL';
+    if (providedPaidAmount !== null) {
+      user.billing.lastPaidAmount = providedPaidAmount;
+      user.billing.lastPaidCurrency = providedPaidCurrency;
+      user.billing.lastPaymentAt = nowIso;
+      user.billing.lastAffiliateCommissionEventKey = buildAffiliateCommissionEventKey(user, {
+        source: 'manual_subscription_verify',
+        eventKey: `manual:${safeString(user.id, 128)}:${nowIso}:${providedPaidAmount.toFixed(2)}:${requestedPlan}`
+      });
+    }
     if (isDevStubActive) {
       user.subscriptionStatus = 'ACTIVE';
       user.billing.currentPeriodEnd = user.billing.currentPeriodEnd || new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)).toISOString();
       user.billing.canceledAt = null;
-      user.subscriptionStartedAt = user.subscriptionStartedAt || user.billing.currentPeriodStart || new Date().toISOString();
+      user.subscriptionStartedAt = user.subscriptionStartedAt || user.billing.currentPeriodStart || nowIso;
+      if (parsePositiveCurrencyAmount(user.billing.lastPaidAmount) === null) {
+        const fallbackPaidAmount = roundCurrencyAmount(resolvePlanReferencePriceEur(requestedPlan));
+        if (fallbackPaidAmount > 0) {
+          user.billing.lastPaidAmount = fallbackPaidAmount;
+          user.billing.lastPaidCurrency = providedPaidCurrency;
+        }
+      }
+      user.billing.lastPaymentAt = user.billing.lastPaymentAt || nowIso;
+      user.billing.lastAffiliateCommissionEventKey = buildAffiliateCommissionEventKey(user, {
+        source: 'manual_subscription_verify'
+      });
     } else {
       user.subscriptionStatus = user.isAdmin ? 'ADMIN' : 'PENDING_VERIFICATION';
     }
     applyUserAccessConsistency(user);
-    syncReferralAttributionForUser(store, user);
+    const manualSubscriptionIsActive = normalizeSubscriptionStatus(user.subscriptionStatus, Boolean(user.isAdmin)) === 'ACTIVE';
+    syncReferralAttributionForUser(store, user, {
+      source: 'manual_subscription_verify',
+      recordCommissionEvent: manualSubscriptionIsActive
+    });
     upsertLeadFromEmail(store, user.email, 'manual_subscription_verify', user, {
       referralCode: user.referredByCode || '',
       referralOwnerEmail: user.referredByEmail || ''
@@ -4237,6 +5318,32 @@ const server = http.createServer(async (req, res) => {
     if (body.cancelRequestedAt !== undefined) {
       targetUser.billing.canceledAt = safeString(body.cancelRequestedAt, 64) || null;
     }
+    if (body.billingPaidAmount !== undefined || body.paidAmount !== undefined) {
+      const parsedPaidAmount = parsePositiveCurrencyAmount(
+        body.billingPaidAmount !== undefined ? body.billingPaidAmount : body.paidAmount
+      );
+      targetUser.billing.lastPaidAmount = parsedPaidAmount;
+    }
+    if (body.billingPaidCurrency !== undefined || body.paidCurrency !== undefined) {
+      targetUser.billing.lastPaidCurrency = sanitizeCurrencyCode(
+        body.billingPaidCurrency !== undefined ? body.billingPaidCurrency : body.paidCurrency
+      );
+    }
+    if (body.billingLastPaymentAt !== undefined || body.lastPaymentAt !== undefined) {
+      targetUser.billing.lastPaymentAt = safeString(
+        body.billingLastPaymentAt !== undefined ? body.billingLastPaymentAt : body.lastPaymentAt,
+        64
+      ) || null;
+    }
+    if (body.billingPaymentChannel !== undefined || body.paymentChannel !== undefined) {
+      const requestedPaymentChannel = safeString(
+        body.billingPaymentChannel !== undefined ? body.billingPaymentChannel : body.paymentChannel,
+        32
+      ).toUpperCase();
+      targetUser.billing.lastPaymentChannel = ['CRYPTO_MANUAL', 'CARD_AUTO', 'UNKNOWN'].includes(requestedPaymentChannel)
+        ? requestedPaymentChannel
+        : targetUser.billing.lastPaymentChannel;
+    }
     if (safeString(targetUser.subscriptionStatus, 32).toUpperCase() === 'ACTIVE') {
       targetUser.billing.canceledAt = null;
       targetUser.subscriptionStartedAt = targetUser.subscriptionStartedAt || targetUser.billing.currentPeriodStart || new Date().toISOString();
@@ -4247,7 +5354,27 @@ const server = http.createServer(async (req, res) => {
 
     applyUserAccessConsistency(targetUser);
     targetUser.subscriptionUpdatedAt = new Date().toISOString();
-    syncReferralAttributionForUser(store, targetUser);
+    const shouldRecordManualCommission = normalizeBillingProfile(targetUser.billing).provider === 'MANUAL'
+      && normalizeSubscriptionStatus(targetUser.subscriptionStatus, Boolean(targetUser.isAdmin)) === 'ACTIVE';
+    if (shouldRecordManualCommission) {
+      const normalizedBilling = normalizeBillingProfile(targetUser.billing);
+      if (!normalizedBilling.lastPaymentAt) {
+        normalizedBilling.lastPaymentAt = new Date().toISOString();
+      }
+      if (parsePositiveCurrencyAmount(normalizedBilling.lastPaidAmount) === null) {
+        const fallbackAmount = roundCurrencyAmount(resolvePlanReferencePriceEur(targetUser.subscriptionPlan));
+        normalizedBilling.lastPaidAmount = fallbackAmount > 0 ? fallbackAmount : normalizedBilling.lastPaidAmount;
+      }
+      normalizedBilling.lastPaymentChannel = normalizedBilling.lastPaymentChannel || 'CRYPTO_MANUAL';
+      normalizedBilling.lastAffiliateCommissionEventKey = buildAffiliateCommissionEventKey(targetUser, {
+        source: 'admin_user_update'
+      });
+      targetUser.billing = normalizedBilling;
+    }
+    syncReferralAttributionForUser(store, targetUser, {
+      source: 'admin_user_update',
+      recordCommissionEvent: shouldRecordManualCommission
+    });
     upsertLeadFromEmail(store, targetUser.email, 'admin_user_update', targetUser, {
       referralCode: targetUser.referredByCode || '',
       referralOwnerEmail: targetUser.referredByEmail || ''
@@ -4373,10 +5500,47 @@ const server = http.createServer(async (req, res) => {
       ? body.trades.map(sanitizeDailyTrade).filter(Boolean).slice(0, 30)
       : [];
     const nextAnalysis = sanitizeText(body.marketAnalysis, 12000);
+    const requestedBourseAnalysis = sanitizeText(
+      body?.marketAnalyses && typeof body.marketAnalyses === 'object' ? body.marketAnalyses.bourse : body.marketAnalysisBourse,
+      12000
+    );
+    const requestedCryptoAnalysis = sanitizeText(
+      body?.marketAnalyses && typeof body.marketAnalyses === 'object' ? body.marketAnalyses.crypto : body.marketAnalysisCrypto,
+      12000
+    );
+    const hasExplicitMarketAnalyses = Boolean(requestedBourseAnalysis || requestedCryptoAnalysis);
+    const requestedSnapshotDate = normalizeDateKey(body.snapshotDate);
 
-    if (!nextTrades.length && !nextAnalysis) {
+    if (!nextTrades.length && !nextAnalysis && !hasExplicitMarketAnalyses) {
       return json(res, 400, { error: 'invalid_trades_payload' });
     }
+
+    const effectiveTrades = nextTrades.length
+      ? nextTrades
+      : (Array.isArray(store.dailyTrades) ? store.dailyTrades : defaultDailyTrades());
+    const effectiveAnalysis = nextAnalysis
+      || (typeof store.marketAnalysis === 'string' ? store.marketAnalysis : defaultMarketAnalysis());
+    const effectiveMarketAnalyses = (() => {
+      if (hasExplicitMarketAnalyses) {
+        return sanitizeMarketAnalyses(
+          {
+            bourse: requestedBourseAnalysis,
+            crypto: requestedCryptoAnalysis
+          },
+          effectiveAnalysis
+        );
+      }
+      if (nextAnalysis) {
+        return sanitizeMarketAnalyses(
+          {
+            bourse: nextAnalysis,
+            crypto: nextAnalysis
+          },
+          effectiveAnalysis
+        );
+      }
+      return sanitizeMarketAnalyses(store.marketAnalyses, effectiveAnalysis);
+    })();
 
     if (nextTrades.length) {
       store.dailyTrades = nextTrades;
@@ -4384,11 +5548,40 @@ const server = http.createServer(async (req, res) => {
     if (nextAnalysis) {
       store.marketAnalysis = nextAnalysis;
     }
+    if (nextAnalysis || hasExplicitMarketAnalyses) {
+      store.marketAnalyses = effectiveMarketAnalyses;
+    }
+
+    const snapshotDateKey = requestedSnapshotDate
+      || inferTradeSnapshotDateKey(effectiveTrades, new Date().toISOString())
+      || new Date().toISOString().slice(0, 10);
+    const snapshot = upsertTradeSnapshot(store, {
+      dateKey: snapshotDateKey,
+      publishedAt: new Date().toISOString(),
+      source: 'admin_patch',
+      trades: effectiveTrades,
+      marketAnalysis: effectiveAnalysis,
+      marketAnalyses: effectiveMarketAnalyses
+    });
+
     writeStore(store);
     return json(res, 200, {
       trades: store.dailyTrades,
       marketAnalysis: store.marketAnalysis,
-      updatedAt: new Date().toISOString()
+      marketAnalyses: store.marketAnalyses,
+      updatedAt: new Date().toISOString(),
+      snapshot: snapshot ? {
+        id: snapshot.id,
+        dateKey: snapshot.dateKey,
+        monthKey: snapshot.monthKey,
+        publishedAt: snapshot.publishedAt
+      } : null,
+      archive: {
+        totalSnapshots: Array.isArray(store.tradeSnapshots) ? store.tradeSnapshots.length : 0,
+        availableSnapshots: sortTradeSnapshotsDesc(store.tradeSnapshots)
+          .slice(0, TRADE_SNAPSHOT_SUMMARY_LIMIT)
+          .map(buildTradeSnapshotSummary)
+      }
     }, adminAuth.responseHeaders);
   }
 

@@ -3,6 +3,16 @@ import { ExternalLink, RefreshCw, Rss } from 'lucide-react';
 import { NewsFeedItem } from '../types';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '';
+const FALLBACK_LOCAL_ITEMS: NewsFeedItem[] = [
+  {
+    id: 'rss-local-fallback',
+    source: 'Black Papers',
+    title: 'Flux actualites temporairement indisponible',
+    summary: 'Le service d actualites ne repond pas sur cet environnement. Verifiez la configuration API/CORS sur Render.',
+    url: '#',
+    publishedAt: new Date().toISOString()
+  }
+];
 
 const formatRelativeTime = (iso: string) => {
   const time = new Date(iso).getTime();
@@ -21,18 +31,49 @@ export const AutoNewsFeed: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'live' | 'fallback'>('live');
   const [showAll, setShowAll] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const parseJsonSafe = async (res: Response) => {
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  };
 
   const loadFeed = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch(`${API_BASE_URL}/api/news-feed`);
-      const data = await res.json();
-      if (res.ok && Array.isArray(data?.items)) setItems(data.items);
-      if (Array.isArray(data?.sources)) setSources(data.sources);
+      const data = await parseJsonSafe(res);
+      if (!res.ok) {
+        setMode('fallback');
+        setItems(FALLBACK_LOCAL_ITEMS);
+        setSources([]);
+        setLoadError(`API news indisponible (${res.status}).`);
+        return;
+      }
+      if (!Array.isArray(data?.items)) {
+        setMode('fallback');
+        setItems(FALLBACK_LOCAL_ITEMS);
+        setSources([]);
+        setLoadError('Reponse API invalide sur /api/news-feed.');
+        return;
+      }
+      setItems(data.items);
+      if (Array.isArray(data?.sources)) {
+        setSources(data.sources);
+      } else {
+        setSources([]);
+      }
       setMode(data?.mode === 'fallback' ? 'fallback' : 'live');
       setShowAll(false);
     } catch {
       setMode('fallback');
+      setItems(FALLBACK_LOCAL_ITEMS);
+      setSources([]);
+      setLoadError('Impossible de joindre l API news. Verifiez VITE_API_BASE_URL et CORS_ORIGIN sur Render.');
     } finally {
       setLoading(false);
     }
@@ -114,6 +155,11 @@ export const AutoNewsFeed: React.FC = () => {
         {mode === 'fallback' && (
           <p className="text-xs text-yellow-300/90 mt-4">
             Le backend n a pas pu joindre les flux externes. Le blog affiche actuellement un jeu d articles de secours.
+          </p>
+        )}
+        {loadError && (
+          <p className="text-xs text-red-300/90 mt-2">
+            {loadError}
           </p>
         )}
       </div>

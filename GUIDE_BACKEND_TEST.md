@@ -23,6 +23,8 @@ ADMIN_BOOTSTRAP_EMAIL=admin@example.com
 ADMIN_BOOTSTRAP_PASSWORD=<MOT_DE_PASSE_FORT>
 SESSION_TOKEN_SECRET=<SECRET_LONG_ALEATOIRE>
 ALLOW_DEV_SUBSCRIPTION_STUB=false
+SESSION_PERSISTENT_LOGIN=true
+PERSISTENT_SESSION_TTL_DAYS=3650
 ```
 
 ## 3) Premier accès admin
@@ -61,6 +63,17 @@ Checklist rapide :
    - `GET /api/auth/session` doit renvoyer l'utilisateur connecté.
 
 Si `POST /api/auth/login` retourne `200` mais que `GET /api/auth/session` retourne `401`, le cookie est bloqué côté navigateur.
+
+## 3 ter) Tester "mot de passe oublié"
+
+1. Depuis la modale `Connexion`, cliquer `Mot de passe oublié ?`.
+2. Entrer l'email du compte.
+3. Vérifier l'email reçu :
+   - `EMAIL_PROVIDER=console` : lien affiché dans les logs backend.
+   - `EMAIL_PROVIDER=resend` : email réel.
+4. Ouvrir le lien (il contient `reset_token`).
+5. Définir un nouveau mot de passe (8+ caractères).
+6. Vérifier que la connexion fonctionne avec le nouveau mot de passe.
 
 ## 4) Tester Lemon Squeezy (mode serveur)
 
@@ -124,6 +137,23 @@ Ce fichier contient utilisateurs, sessions, leads, posts, reviews, signaux.
 4. `/api/trades` refusé sans VIP
 5. Segmentation bourse/crypto respectée
 6. Admin accessible uniquement compte admin
+
+## 9 bis) Rappel mise en production : email onboarding + starter kit
+
+À valider avant passage public :
+1. L’email onboarding doit reprendre le même contenu que l’email starter kit.
+2. Le client doit recevoir dans cet email :
+   - le lien vers le module 1 (jargon),
+   - le lien vers le module 2 (choix plateforme),
+   - le lien vers la vidéo du starter kit.
+3. Vérifier en environnement réel :
+   - `EMAIL_PROVIDER=resend`,
+   - domaine expéditeur validé,
+   - délivrabilité (SPF/DKIM/DMARC).
+4. Supprimer avant production tous les comptes de test et tout mot de passe en dur :
+   - aucun identifiant de test dans `store.json`,
+   - aucun mot de passe en clair dans le code, la doc ou les fichiers versionnés,
+   - rotation des secrets (`ADMIN_BOOTSTRAP_PASSWORD`, clés API, tokens) avant ouverture publique.
 
 ## 10) Step-by-step admin (non technique)
 

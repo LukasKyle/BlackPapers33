@@ -58,6 +58,11 @@ URL locale backend: `http://localhost:8787`
 - `LEMON_CHECKOUT_URL_BOURSE` (fallback URL mode)
 - `LEMON_CHECKOUT_URL_CRYPTO` (fallback URL mode)
 - `LEMON_CHECKOUT_URL_COMBO` (fallback URL mode)
+- `LEMON_AFFILIATE_EXTERNAL_ENABLED` (`true` si vous déléguez l’affiliation carte à Lemon)
+- `PLAN_PRICE_BOURSE_EUR` (par défaut `29`)
+- `PLAN_PRICE_CRYPTO_EUR` (par défaut `29`)
+- `PLAN_PRICE_COMBO_EUR` (par défaut `49`)
+- `AFFILIATE_CRYPTO_COMMISSION_RATE` (par défaut `0.5` = 50%)
 - `SESSION_TOKEN_SECRET` (secret)
 - `SESSION_COOKIE_NAME`
 - `SESSION_COOKIE_SECURE`
@@ -75,6 +80,7 @@ URL locale backend: `http://localhost:8787`
 - `EMAIL_FROM`
 - `RESEND_API_KEY` (si `EMAIL_PROVIDER=resend`)
 - `EMAIL_VERIFY_TOKEN_TTL_HOURS`
+- `PASSWORD_RESET_TOKEN_TTL_HOURS`
 - `EMAIL_TOKEN_SECRET`
 - `RSS_REQUEST_TIMEOUT_MS`
 - `MARKET_REQUEST_TIMEOUT_MS`
@@ -120,6 +126,7 @@ Le frontend reçoit automatiquement l’URL de l’API via `fromService`.
 
 - Auth sociale via flux OAuth serveur (Google/Facebook/LinkedIn/Apple) avec callback backend.
 - Vérification email + endpoint de renvoi de lien.
+- Réinitialisation mot de passe côté serveur (`/api/auth/forgot-password`, `/api/auth/reset-password`).
 - Restauration de session legacy désactivée.
 - Les secrets ne doivent jamais être exposés en `VITE_*`.
 - Le backend valide les accès premium et la segmentation Bourse/Crypto côté serveur.

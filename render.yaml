@@ -15,11 +15,20 @@ services:
       - key: APP_ENV
         value: production
       - key: CORS_ORIGIN
-        sync: false
+        fromService:
+          type: web
+          name: black-papers-web
+          property: url
       - key: PUBLIC_APP_URL
-        sync: false
+        fromService:
+          type: web
+          name: black-papers-web
+          property: url
       - key: BACKEND_PUBLIC_URL
-        sync: false
+        fromService:
+          type: web
+          name: black-papers-api
+          property: url
       - key: ADMIN_BOOTSTRAP_EMAIL
         sync: false
       - key: ADMIN_BOOTSTRAP_PASSWORD
@@ -76,6 +85,16 @@ services:
         sync: false
       - key: LEMON_CHECKOUT_URL_COMBO
         sync: false
+      - key: LEMON_AFFILIATE_EXTERNAL_ENABLED
+        value: "false"
+      - key: PLAN_PRICE_BOURSE_EUR
+        value: "29"
+      - key: PLAN_PRICE_CRYPTO_EUR
+        value: "29"
+      - key: PLAN_PRICE_COMBO_EUR
+        value: "49"
+      - key: AFFILIATE_CRYPTO_COMMISSION_RATE
+        value: "0.5"
       - key: EMAIL_PROVIDER
         value: console
       - key: EMAIL_FROM
@@ -84,6 +103,16 @@ services:
         sync: false
       - key: EMAIL_TOKEN_SECRET
         sync: false
+      - key: HUBSPOT_PORTAL_ID
+        value: "148215821"
+      - key: HUBSPOT_SIGNUP_FORM_GUID
+        value: "37e16bb6-49bd-42bc-b091-49e06cf53f82"
+      - key: HUBSPOT_PRIVATE_APP_TOKEN
+        sync: false
+      - key: HUBSPOT_ACCESS_TOKEN
+        sync: false
+      - key: HUBSPOT_SYNC_TIMEOUT_MS
+        value: "8000"
   - type: web
     name: black-papers-web
     runtime: static
@@ -96,6 +125,9 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_BASE_URL
-        sync: false
+        fromService:
+          type: web
+          name: black-papers-api
+          property: url
       - key: VITE_ENABLE_ADMIN_CONSOLE
         value: "false"

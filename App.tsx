@@ -67,9 +67,18 @@ interface AdminUser {
       pseudo: string;
       email?: string;
       subscriptionPlan?: string;
+      subscriptionStatus?: string;
       subscriptionActive: boolean;
+      paymentProvider?: string;
+      paymentChannel?: string;
+      commissionModel?: string;
       commissionAmount: number;
       commissionStatus: 'LOCKED' | 'READY_TO_PAY' | 'PAID';
+      followUpRequired?: boolean;
+      paidAmount?: number;
+      paidCurrency?: string;
+      lastPaymentAt?: string | null;
+      updatedAt?: string | null;
       joinedAt?: string;
     }>;
     commissionHistory: AffiliateCommission[];
@@ -168,6 +177,33 @@ interface CrmOverview {
     canceledUsers: number;
   };
   plans: Record<string, number>;
+  affiliates?: Array<{
+    ownerUserId: string | null;
+    ownerEmail: string;
+    referralCode: string | null;
+    referralsCount: number;
+    activeReferralsCount: number;
+    followUpRequiredCount?: number;
+    totalCommissionAmount: number;
+    referrals: Array<{
+      id: string;
+      pseudo: string;
+      subscriptionPlan: string;
+      subscriptionStatus?: string;
+      subscriptionActive: boolean;
+      paymentProvider?: string;
+      paymentChannel?: string;
+      commissionModel?: string;
+      commissionAmount: number;
+      commissionStatus: 'LOCKED' | 'READY_TO_PAY' | 'PAID';
+      followUpRequired?: boolean;
+      paidAmount?: number;
+      paidCurrency?: string;
+      lastPaymentAt?: string | null;
+      updatedAt?: string | null;
+      joinedAt: string | null;
+    }>;
+  }>;
   leads: CrmLead[];
 }
 
@@ -212,6 +248,18 @@ const apiFetch = (path: string, init: RequestInit = {}) => {
   });
 };
 
+const getCookieValue = (name: string): string => {
+  if (typeof document === 'undefined') return '';
+  const escaped = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
+  if (!match || !match[1]) return '';
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+};
+
 const getFriendlyAuthError = (code: string): string => {
   switch (code) {
     case 'invalid_credentials':
@@ -240,6 +288,22 @@ const getFriendlyAuthError = (code: string): string => {
       return "Lien de vérification expiré. Demandez un nouvel email.";
     case 'verification_invalid':
       return "Lien de vérification invalide.";
+    case 'invalid_reset_payload':
+      return "Données de réinitialisation invalides.";
+    case 'reset_token_invalid':
+      return "Lien de réinitialisation invalide.";
+    case 'reset_token_expired':
+      return "Lien de réinitialisation expiré. Demandez un nouveau lien.";
+    case 'password_unchanged':
+      return "Choisissez un mot de passe différent de l'ancien.";
+    case 'delete_confirmation_invalid':
+      return "Confirmation invalide. Tapez exactement SUPPRIMER.";
+    case 'delete_email_mismatch':
+      return "L'email de confirmation ne correspond pas à votre compte.";
+    case 'admin_delete_forbidden':
+      return "Suppression d'un compte admin désactivée ici. Utilisez la procédure admin dédiée.";
+    case 'account_delete_failed':
+      return "Suppression du compte impossible pour le moment.";
     case 'session_cookie_blocked':
       return "Connexion refusée par le navigateur : cookie de session non accepté. Vérifiez la configuration backend (SameSite=None + Secure en HTTPS, CORS autorisé).";
     default:
@@ -298,6 +362,8 @@ const normalizeRequestedPlan = (value?: string | null): 'bourse' | 'crypto' | 'c
   if (normalized === 'crypto') return 'crypto';
   return 'combo';
 };
+
+const normalizeEmailSearch = (value?: string | null): string => String(value || '').trim().toLowerCase();
 
 const getSubscriptionApiErrorMessage = (code: string): string => {
   switch (code) {
@@ -363,6 +429,36 @@ const formatCommissionStatus = (status: 'LOCKED' | 'READY_TO_PAY' | 'PAID'): str
     default:
       return 'En attente';
   }
+};
+
+const formatPaymentProviderLabel = (provider?: string | null): string => {
+  switch ((provider || '').toUpperCase()) {
+    case 'MANUAL':
+      return 'Crypto manuel';
+    case 'LEMON_SQUEEZY':
+      return 'Carte (Lemon)';
+    default:
+      return 'Non renseigne';
+  }
+};
+
+const formatCommissionModelLabel = (model?: string | null): string => {
+  switch ((model || '').toUpperCase()) {
+    case 'CRYPTO_50_PERCENT_MANUAL':
+      return '50% (crypto)';
+    case 'LEMON_AFFILIATE_EXTERNAL':
+      return 'Externe Lemon';
+    case 'LEMON_CARD_INTERNAL_DISABLED':
+      return 'Carte sans partage interne';
+    default:
+      return 'Aucun';
+  }
+};
+
+const formatFollowUpLabel = (followUpRequired?: boolean, provider?: string | null): string => {
+  if (followUpRequired) return 'Oui';
+  if ((provider || '').toUpperCase() === 'LEMON_SQUEEZY') return 'Non (auto)';
+  return 'Non';
 };
 
 const DEFAULT_PERMISSIONS = {
@@ -731,6 +827,204 @@ const COURSE_MODULES: CourseModule[] = [
       {
         title: "Ce que font les debutants",
         text: "Ils entrent d'abord, puis cherchent des raisons ensuite.\n\nLe bon ordre est l'inverse : analyse, plan, taille, execution."
+      }
+    ]
+  },
+  {
+    id: 'm10',
+    title: 'Module 10 : Plan de Trading Ecrit',
+    description: 'Construire un plan concret et mesurable pour arreter les decisions au hasard.',
+    level: 'INTERMEDIATE',
+    durationMinutes: 9,
+    icon: <Calculator />,
+    content: [
+      {
+        title: "Pourquoi ecrire un plan",
+        text: "Un plan ecrit evite de trader selon l'humeur.\n\nVotre plan doit definir :\n• marche cible (crypto, bourse, ou les deux)\n• horaires autorises\n• setups autorises\n• risque max par trade et par jour\n• conditions d'arret.\n\nSi ce n'est pas ecrit, ce n'est pas une regle."
+      },
+      {
+        title: "Objectifs SMART de trader",
+        text: "Votre objectif ne doit pas etre 'devenir riche vite'.\n\nExemple SMART :\n• prendre seulement 2 setups qualifies par jour\n• respecter 100% des stops sur 30 jours\n• ne pas depasser -3% de perte hebdomadaire.\n\nOn mesure la qualite du process avant de mesurer l'argent."
+      },
+      {
+        title: "Regles de suspension",
+        text: "Un bon plan inclut des coupe-circuits :\n\n• 2 pertes emotionnelles consecutives -> stop de la journee\n• semaine negative + erreurs de discipline -> reduction de taille\n• fatigue / stress eleve -> pas de trading.\n\nLes pauses protegeant le capital sont des decisions professionnelles."
+      }
+    ]
+  },
+  {
+    id: 'm11',
+    title: 'Module 11 : Multi-Timeframes',
+    description: 'Aligner contexte long terme et execution court terme.',
+    level: 'INTERMEDIATE',
+    durationMinutes: 8,
+    icon: <Layers />,
+    content: [
+      {
+        title: "Structure en 3 etages",
+        text: "Framework simple :\n\n• 1D / 4H : contexte (biais et zones majeures)\n• 1H / 15m : setup\n• 5m / 1m : execution.\n\nOn ne decide pas le sens du trade sur le plus petit timeframe."
+      },
+      {
+        title: "Conflits de timeframes",
+        text: "Quand le 5m monte mais le 4H baisse, vous etes en contre-tendance.\n\nOptions propres :\n• reduire la taille\n• viser des objectifs plus courts\n• attendre un setup dans le sens du 4H."
+      },
+      {
+        title: "Routine avant entree",
+        text: "Avant chaque ordre :\n1. noter le biais HTF\n2. identifier la zone de travail\n3. valider le trigger LTF\n4. calculer le risque.\n\nPas de validation des 4 etapes = pas de trade."
+      }
+    ]
+  },
+  {
+    id: 'm12',
+    title: 'Module 12 : Timing de Session',
+    description: 'Savoir quelles heures trader, et lesquelles eviter.',
+    level: 'INTERMEDIATE',
+    durationMinutes: 7,
+    icon: <Clock />,
+    content: [
+      {
+        title: "Fenêtres horaires utiles",
+        text: "Toutes les heures ne se valent pas.\n\nEn general :\n• ouverture Europe : plus de mouvement sur FX/indices EU\n• ouverture US : acceleration sur indices US et crypto\n• heures creuses : faux signaux plus frequents."
+      },
+      {
+        title: "Volatilite vs liquidite",
+        text: "Volatilite forte sans liquidite suffisante = execution mauvaise.\n\nVous cherchez un equilibre :\n• volatilite exploitable\n• spread correct\n• slippage acceptable."
+      },
+      {
+        title: "Planning hebdomadaire",
+        text: "Planifiez vos sessions :\n\n• jours de publication macro majeure -> prudence\n• jours plus calmes -> execution selective\n• bilan de fin de semaine -> revue des stats.\n\nLe timing fait partie de la strategie, pas un detail."
+      }
+    ]
+  },
+  {
+    id: 'm13',
+    title: 'Module 13 : Bibliotheque de Setups',
+    description: 'Normaliser 3 setups repetables : breakout, retest, retour de range.',
+    level: 'INTERMEDIATE',
+    durationMinutes: 10,
+    icon: <Crosshair />,
+    content: [
+      {
+        title: "Setup 1 : Breakout propre",
+        text: "Checklist breakout :\n• zone claire\n• volume en hausse\n• cloture au-dessus / en dessous de la zone\n• invalidation nette.\n\nSans confirmation, le breakout devient souvent fakeout."
+      },
+      {
+        title: "Setup 2 : Retest valide",
+        text: "Le retest permet souvent une meilleure entree.\n\nElements attends :\n• retour sur zone cassée\n• reaction nette (rejet, impulsion)\n• stop derriere l'invalidation logique."
+      },
+      {
+        title: "Setup 3 : Retour de range",
+        text: "Quand le marche revient dans son range, on traite les extremes, pas le milieu.\n\n• achat proche du bas du range\n• vente proche du haut du range\n• invalidation hors range.\n\nObjectif : execution propre, pas prediction heroique."
+      }
+    ]
+  },
+  {
+    id: 'm14',
+    title: 'Module 14 : Exposition et Correlation',
+    description: 'Eviter de prendre 3 trades differents qui sont en realite le meme risque.',
+    level: 'ADVANCED',
+    durationMinutes: 9,
+    icon: <Shield />,
+    content: [
+      {
+        title: "Risque cache par correlation",
+        text: "Exemple : acheter NAS100, acheter BTC et acheter un panier tech peut exposer au meme facteur risk-on.\n\nVous pensez avoir diversifie, mais vous avez concentre votre risque."
+      },
+      {
+        title: "Budget risque portefeuille",
+        text: "Au lieu de raisonner trade par trade uniquement, ajoutez une limite globale :\n\n• risque total simultane max (ex: 2% ou 3%)\n• limite par classe d'actifs\n• limite par theme macro."
+      },
+      {
+        title: "Quand reduire l'exposition",
+        text: "Reduire ou neutraliser l'exposition quand :\n\n• correlation forte entre vos positions\n• evenement macro imminent\n• performance recente en baisse + erreurs de process."
+      }
+    ]
+  },
+  {
+    id: 'm15',
+    title: 'Module 15 : Protocole News & Macro',
+    description: 'Un cadre clair avant, pendant et apres les annonces majeures.',
+    level: 'ADVANCED',
+    durationMinutes: 8,
+    icon: <Calendar />,
+    content: [
+      {
+        title: "Avant la news",
+        text: "Checklist pre-news :\n• identifier l'heure exacte\n• verifier les positions ouvertes\n• reduire la taille ou sortir partiellement\n• definir scenario A / B."
+      },
+      {
+        title: "Pendant la news",
+        text: "Regle defensive : ne pas confondre vitesse et opportunite.\n\nPendant les annonces, spread et slippage explosent souvent. Vous pouvez rater un trade, mais vous ne devez pas casser votre gestion du risque."
+      },
+      {
+        title: "Apres la news",
+        text: "Attendre la stabilisation :\n\n• premiere impulsion\n• retest\n• confirmation structurelle.\n\nVotre edge est souvent apres le chaos initial, pas au milieu."
+      }
+    ]
+  },
+  {
+    id: 'm16',
+    title: 'Module 16 : Gestion Active de Position',
+    description: 'Savoir gerer un trade vivant : reduction, break-even et sortie partielle.',
+    level: 'ADVANCED',
+    durationMinutes: 9,
+    icon: <Target />,
+    content: [
+      {
+        title: "Sorties partielles",
+        text: "Sortir en plusieurs etapes permet de securiser sans couper tout le potentiel.\n\nExemple :\n• 50% a TP1\n• 30% a TP2\n• 20% laisse courir selon structure."
+      },
+      {
+        title: "Passage au break-even",
+        text: "Passer le stop a break-even trop vite peut vous sortir d'un bon trade.\n\nFaites-le apres un vrai signal de validation (ex: structure cassée + retest), pas juste parce que vous avez peur."
+      },
+      {
+        title: "Invalidation dynamique",
+        text: "Une position doit etre fermee si la logique initiale disparait.\n\nVous ne gerez pas un trade en esperant. Vous gerez un scenario qui doit rester valide."
+      }
+    ]
+  },
+  {
+    id: 'm17',
+    title: 'Module 17 : Revue de Performance',
+    description: 'Analyser vos resultats comme un systeme, pas comme une suite d emotions.',
+    level: 'ADVANCED',
+    durationMinutes: 8,
+    icon: <Database />,
+    content: [
+      {
+        title: "KPIs a suivre",
+        text: "Mesures minimales :\n• winrate\n• R moyen\n• drawdown max\n• gain/perte moyen\n• respect du plan (%).\n\nSans KPIs, vous n'optimisez rien."
+      },
+      {
+        title: "Audit mensuel",
+        text: "Chaque mois, classez vos trades :\n\n• setups rentables\n• setups neutres\n• setups destructeurs.\n\nLe but est de supprimer ce qui detruit et renforcer ce qui marche."
+      },
+      {
+        title: "Plan d'amelioration",
+        text: "Transformez l'analyse en actions :\n\n• 1 comportement a corriger\n• 1 regle a renforcer\n• 1 setup a prioriser pour le mois suivant.\n\nUne petite iteration propre vaut mieux qu'une refonte emotionnelle."
+      }
+    ]
+  },
+  {
+    id: 'm18',
+    title: 'Module 18 : Hygiene, Broker et Arnaques',
+    description: 'Proteger votre capital contre les erreurs hors-marche : fraude, levier abusif, promesses trompeuses.',
+    level: 'ADVANCED',
+    durationMinutes: 7,
+    icon: <AlertTriangle />,
+    content: [
+      {
+        title: "Verifier son broker/exchange",
+        text: "Controle minimum :\n• reputation et anciennete\n• structure de frais claire\n• execution testee sur petit volume\n• support client reactif.\n\nN'envoyez pas un gros capital sans phase de test."
+      },
+      {
+        title: "Red flags classiques",
+        text: "Signaux de risque :\n• promesse de rendement garanti\n• pression pour deposer vite\n• absence de transparence sur les frais\n• influenceur qui montre uniquement des gains."
+      },
+      {
+        title: "Regles de protection",
+        text: "Regles simples :\n• capital segmente (pas tout au meme endroit)\n• 2FA active partout\n• mot de passe unique par plateforme\n• retraits testes regulierement.\n\nLa securite operationnelle fait partie de la performance."
       }
     ]
   }
@@ -1450,14 +1744,30 @@ const Frown = ({ className }: { className?: string }) => (
 
 const TwitterFeed: React.FC = () => {
   const [snapshot, setSnapshot] = useState<XFeedSnapshot | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const parseJsonSafe = async (res: Response) => {
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
     const load = async () => {
+      setLoading(true);
+      setLoadError(null);
       try {
         const response = await apiFetch('/api/social/x-feed');
-        const data = await response.json();
-        if (!isMounted || !response.ok) return;
+        const data = await parseJsonSafe(response);
+        if (!isMounted) return;
+        if (!response.ok || !data) {
+          setLoadError(`API X indisponible (${response.status}).`);
+          return;
+        }
         setSnapshot({
           mode: String(data?.mode || 'curated_manual'),
           updatedAt: String(data?.updatedAt || new Date().toISOString()),
@@ -1466,6 +1776,11 @@ const TwitterFeed: React.FC = () => {
         });
       } catch {
         if (!isMounted) return;
+        setLoadError('Impossible de charger la veille X. Verifiez VITE_API_BASE_URL et CORS_ORIGIN sur Render.');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     load();
@@ -1484,7 +1799,7 @@ const TwitterFeed: React.FC = () => {
            <span>Veille X (Bourse/Crypto)</span>
          </div>
          <span className="text-xs text-gray-500">
-           {snapshot?.mode === 'curated_manual' ? 'Curation manuelle' : snapshot?.mode || 'Mode inconnu'}
+           {loadError ? 'API indisponible' : snapshot?.mode === 'curated_manual' ? 'Curation manuelle' : snapshot?.mode || 'Mode inconnu'}
          </span>
       </div>
       <div className="divide-y divide-gray-800 max-h-[400px] overflow-y-auto">
@@ -1508,12 +1823,20 @@ const TwitterFeed: React.FC = () => {
               </div>
            </a>
          ))}
-         {(!snapshot || snapshot.accounts.length === 0) && (
+         {loading && (
+          <div className="p-4 text-sm text-gray-500">Chargement...</div>
+         )}
+         {!loading && !loadError && (!snapshot || snapshot.accounts.length === 0) && (
           <div className="p-4 text-sm text-gray-500">Aucun compte X configure pour le moment.</div>
+         )}
+         {!loading && loadError && (
+          <div className="p-4 text-sm text-red-300/90">{loadError}</div>
          )}
       </div>
       <div className="p-3 text-[11px] text-gray-500 border-t border-gray-800 bg-[#070707]">
-        {snapshot?.note || 'Mode curation: ouverture vers les comptes X. Le flux API X officiel n est pas active sur cet environnement.'}
+        {loadError
+          ? 'Le flux X ne repond pas sur cet environnement. Controlez les variables Render frontend/backend.'
+          : snapshot?.note || 'Mode curation: ouverture vers les comptes X. Le flux API X officiel n est pas active sur cet environnement.'}
       </div>
     </div>
   );
@@ -2111,7 +2434,7 @@ const AdminConsole: React.FC<{
   onPublish: (post: Post) => Promise<boolean>;
   onUpdatePost: (postId: string, payload: Partial<Post>) => Promise<boolean>;
   onGenerateRssDrafts: (limit: number, publishNow: boolean) => Promise<{ created: number; published: boolean } | null>;
-  onUpdateTrades: (payload: { trades: Trade[]; marketAnalysis: string }) => Promise<boolean>;
+  onUpdateTrades: (payload: { trades: Trade[]; marketAnalysis: string; snapshotDate?: string }) => Promise<boolean>;
   trades: Trade[];
   marketAnalysis: string;
   onCreateTestUser: (payload: {
@@ -2174,6 +2497,7 @@ const AdminConsole: React.FC<{
   const [editorLocked, setEditorLocked] = useState(false);
   const [editorDraft, setEditorDraft] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState('');
+  const [manualPublishTarget, setManualPublishTarget] = useState<'BLOG' | 'BOURSE' | 'CRYPTO'>('BLOG');
   const [userEmail, setUserEmail] = useState('');
   const [userPassword, setUserPassword] = useState('');
   const [userSubscribed, setUserSubscribed] = useState(true);
@@ -2186,13 +2510,16 @@ const AdminConsole: React.FC<{
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [tradeDrafts, setTradeDrafts] = useState<Trade[]>(trades);
   const [tradeMarketAnalysis, setTradeMarketAnalysis] = useState(marketAnalysis);
+  const [tradeSnapshotDate, setTradeSnapshotDate] = useState('');
   const [savingTrades, setSavingTrades] = useState(false);
   const [refreshingCrm, setRefreshingCrm] = useState(false);
   const [generatingRssDrafts, setGeneratingRssDrafts] = useState(false);
   const [rssPublishNow, setRssPublishNow] = useState(false);
+  const [crmEmailSearch, setCrmEmailSearch] = useState('');
 
   useEffect(() => {
     setTradeDrafts(trades);
+    setTradeSnapshotDate(new Date().toISOString().slice(0, 10));
   }, [trades, isOpen]);
 
   useEffect(() => {
@@ -2214,6 +2541,18 @@ const AdminConsole: React.FC<{
     setEditorTags('');
     setEditorLocked(false);
     setEditorDraft(false);
+    setManualPublishTarget('BLOG');
+  };
+
+  const inferManualPublishTargetFromPost = (post: Post): 'BLOG' | 'BOURSE' | 'CRYPTO' => {
+    if (post.type !== ContentType.TRADE_SIGNAL) return 'BLOG';
+    const tagsText = Array.isArray(post.tags) ? post.tags.join(' ') : '';
+    const tradeAsset = post.tradeDetails?.asset || '';
+    const searchable = `${post.title} ${post.excerpt} ${tagsText} ${tradeAsset}`.toUpperCase();
+    if (/(BTC|ETH|USDT|SOL|XRP|ADA|BNB|CRYPTO|COIN|ALTCOIN)/.test(searchable)) {
+      return 'CRYPTO';
+    }
+    return 'BOURSE';
   };
 
   const loadPostIntoEditor = (postId: string) => {
@@ -2228,6 +2567,7 @@ const AdminConsole: React.FC<{
     }
     setSelectedPostId(postId);
     setMode(targetPost.type === ContentType.TRADE_SIGNAL ? 'TRADE' : 'BLOG');
+    setManualPublishTarget(inferManualPublishTargetFromPost(targetPost));
     setEditorTitle(targetPost.title || '');
     setEditorExcerpt(targetPost.excerpt || '');
     setEditorContent(targetPost.content || '');
@@ -2261,13 +2601,21 @@ const AdminConsole: React.FC<{
       alert('Ajoutez au minimum un titre et un résumé.');
       return;
     }
+    const baseTags = editorTags.split(',').map(tag => tag.trim()).filter(Boolean);
+    const normalizedTags = [...baseTags];
+    if (manualPublishTarget === 'CRYPTO' && !normalizedTags.some((tag) => /crypto|btc|eth|usdt|coin/i.test(tag))) {
+      normalizedTags.push('crypto');
+    }
+    if (manualPublishTarget === 'BOURSE' && !normalizedTags.some((tag) => /bourse|action|indice|nasdaq|sp500/i.test(tag))) {
+      normalizedTags.push('bourse');
+    }
     const payload = {
       title: editorTitle,
       excerpt: editorExcerpt,
       content: editorContent,
-      tags: editorTags.split(',').map(tag => tag.trim()).filter(Boolean),
+      tags: normalizedTags,
       date: new Date().toLocaleDateString('fr-FR'),
-      type: mode === 'BLOG' ? ContentType.ARTICLE : ContentType.TRADE_SIGNAL,
+      type: manualPublishTarget === 'BLOG' ? ContentType.ARTICLE : ContentType.TRADE_SIGNAL,
       isLocked: editorLocked,
       publicationStatus: editorDraft ? 'DRAFT' : 'PUBLISHED'
     };
@@ -2371,7 +2719,8 @@ const AdminConsole: React.FC<{
       .filter((trade) => trade.actif && trade.taille && trade.raison && trade.heure);
     const ok = await onUpdateTrades({
       trades: sanitizedTrades,
-      marketAnalysis: tradeMarketAnalysis
+      marketAnalysis: tradeMarketAnalysis,
+      snapshotDate: tradeSnapshotDate || undefined
     });
     if (!ok) {
       alert('Impossible de sauvegarder les signaux.');
@@ -2382,6 +2731,34 @@ const AdminConsole: React.FC<{
   const crmFunnel = crmOverview?.funnel;
   const crmLeads = Array.isArray(crmOverview?.leads) ? crmOverview.leads : [];
   const crmPlanBreakdown = crmOverview?.plans || {};
+  const crmAffiliates = Array.isArray(crmOverview?.affiliates) ? crmOverview.affiliates : [];
+  const normalizedCrmEmailSearch = normalizeEmailSearch(crmEmailSearch);
+  const crmAccountsHistory = [...users]
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    .slice(0, 200);
+  const filteredCrmAccountsHistory = normalizedCrmEmailSearch
+    ? crmAccountsHistory.filter((account) => normalizeEmailSearch(account.email).includes(normalizedCrmEmailSearch))
+    : crmAccountsHistory;
+  const filteredCrmLeads = normalizedCrmEmailSearch
+    ? crmLeads.filter((lead) => normalizeEmailSearch(lead.email).includes(normalizedCrmEmailSearch))
+    : crmLeads;
+  const filteredCrmAffiliates = normalizedCrmEmailSearch
+    ? crmAffiliates.filter((affiliate) => normalizeEmailSearch(affiliate.ownerEmail).includes(normalizedCrmEmailSearch))
+    : crmAffiliates;
+  const selectedClient = normalizedCrmEmailSearch
+    ? crmAccountsHistory.find((account) => normalizeEmailSearch(account.email) === normalizedCrmEmailSearch)
+      || filteredCrmAccountsHistory[0]
+      || null
+    : null;
+  const selectedClientPermissions = selectedClient ? getUserPermissions(selectedClient as SessionUser) : DEFAULT_PERMISSIONS;
+  const selectedClientLeadHistory = selectedClient
+    ? crmLeads
+      .filter((lead) => normalizeEmailSearch(lead.email) === normalizeEmailSearch(selectedClient.email))
+      .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+    : [];
+  const selectedClientAffiliate = selectedClient
+    ? crmAffiliates.find((affiliate) => normalizeEmailSearch(affiliate.ownerEmail) === normalizeEmailSearch(selectedClient.email)) || null
+    : null;
   const lemonPlansState = lemonConfig?.lemon?.plans || { bourse: false, crypto: false, combo: false };
 
   if (!isOpen) return null;
@@ -2433,11 +2810,20 @@ const AdminConsole: React.FC<{
         <div className="flex-1 overflow-hidden">
           {activeTab === 'TRADES' ? (
             <div className="p-6 overflow-y-auto h-full space-y-5">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <h3 className="text-lg font-bold text-white">Signaux quotidiens (edition sans code)</h3>
                   <p className="text-xs text-gray-500 mt-1">Cette section met a jour /api/trades via /api/admin/trades.</p>
                 </div>
+                <label className="text-xs text-gray-400 min-w-[180px]">
+                  Date d'archive
+                  <input
+                    type="date"
+                    value={tradeSnapshotDate}
+                    onChange={(event) => setTradeSnapshotDate(event.target.value)}
+                    className="mt-1 w-full bg-[#111] border border-gray-700 rounded p-2 text-white text-sm"
+                  />
+                </label>
                 <button
                   onClick={handleAddTrade}
                   className="inline-flex items-center gap-2 px-3 py-2 text-xs font-bold bg-primary text-black rounded hover:bg-primary-dark"
@@ -2529,6 +2915,7 @@ const AdminConsole: React.FC<{
                   onClick={() => {
                     setTradeDrafts(trades);
                     setTradeMarketAnalysis(marketAnalysis);
+                    setTradeSnapshotDate(new Date().toISOString().slice(0, 10));
                   }}
                   className="px-4 py-2 border border-gray-700 text-gray-300 rounded hover:border-gray-500 hover:text-white"
                 >
@@ -2545,6 +2932,123 @@ const AdminConsole: React.FC<{
             </div>
           ) : activeTab === 'CRM' ? (
             <div className="p-6 overflow-y-auto h-full space-y-6">
+              <div className="bg-black border border-gray-800 rounded-lg p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                  <label className="flex-1 max-w-2xl">
+                    <span className="text-xs uppercase tracking-wider text-gray-500">Recherche client (email uniquement)</span>
+                    <div className="mt-2 flex items-center gap-2 rounded-lg border border-gray-700 bg-[#111] px-3 py-2">
+                      <Search size={14} className="text-gray-500" />
+                      <input
+                        value={crmEmailSearch}
+                        onChange={(event) => setCrmEmailSearch(event.target.value)}
+                        placeholder="ex: client@domaine.com"
+                        className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-600"
+                      />
+                    </div>
+                  </label>
+                  <button
+                    onClick={() => setCrmEmailSearch('')}
+                    disabled={!crmEmailSearch.trim()}
+                    className="px-3 py-2 text-xs font-bold border border-gray-700 rounded text-gray-300 hover:text-white disabled:opacity-40"
+                  >
+                    Effacer
+                  </button>
+                </div>
+                {normalizedCrmEmailSearch && (
+                  <p className="mt-3 text-xs text-gray-500">
+                    Résultats : {filteredCrmAccountsHistory.length} compte{filteredCrmAccountsHistory.length > 1 ? 's' : ''} · {filteredCrmLeads.length} événement{filteredCrmLeads.length > 1 ? 's' : ''} lead
+                  </p>
+                )}
+              </div>
+
+              {normalizedCrmEmailSearch && (
+                <div className="bg-black border border-gray-800 rounded-lg overflow-hidden">
+                  <div className="p-4 border-b border-gray-800">
+                    <h3 className="text-lg font-bold text-white">Historique client</h3>
+                    <p className="text-xs text-gray-500 mt-1">Historique consolidé du client recherché.</p>
+                  </div>
+                  {!selectedClient ? (
+                    <div className="p-4 text-sm text-gray-500">Aucun client trouvé pour cet email.</div>
+                  ) : (
+                    <div className="p-4 space-y-4">
+                      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
+                        <div className="bg-[#111] border border-gray-800 rounded p-3">
+                          <p className="text-xs text-gray-500">Email</p>
+                          <p className="text-sm font-bold text-white break-all">{selectedClient.email}</p>
+                        </div>
+                        <div className="bg-[#111] border border-gray-800 rounded p-3">
+                          <p className="text-xs text-gray-500">Date de création</p>
+                          <p className="text-sm font-bold text-white">{formatDateLabel(selectedClient.createdAt)}</p>
+                        </div>
+                        <div className="bg-[#111] border border-gray-800 rounded p-3">
+                          <p className="text-xs text-gray-500">Plan / Statut</p>
+                          <p className="text-sm font-bold text-white">{formatPlanLabel(selectedClient.subscriptionPlan || 'NONE')} · {formatSubscriptionStatusLabel(selectedClient.subscriptionStatus || 'NONE')}</p>
+                        </div>
+                        <div className="bg-[#111] border border-gray-800 rounded p-3">
+                          <p className="text-xs text-gray-500">VIP</p>
+                          <p className={selectedClientPermissions.vipAccess ? 'text-sm font-bold text-green-400' : 'text-sm font-bold text-gray-400'}>
+                            {selectedClientPermissions.vipAccess ? 'Actif' : 'Inactif'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-3 text-xs">
+                        <div className="bg-[#111] border border-gray-800 rounded p-3">
+                          <p className="text-gray-500">Code parrain utilisé</p>
+                          <p className="text-white font-bold mt-1">{selectedClient.referredByCode || '-'}</p>
+                        </div>
+                        <div className="bg-[#111] border border-gray-800 rounded p-3">
+                          <p className="text-gray-500">Parrain (email)</p>
+                          <p className="text-white font-bold mt-1">{selectedClient.referredByEmail || '-'}</p>
+                        </div>
+                      </div>
+
+                      {selectedClientAffiliate && (
+                        <div className="bg-[#111] border border-gray-800 rounded p-3 text-xs">
+                          <p className="text-gray-500">Programme parrainage du client</p>
+                          <p className="text-white mt-1">
+                            Code : <span className="font-bold">{selectedClientAffiliate.referralCode || '-'}</span> · Filleuls : <span className="font-bold">{selectedClientAffiliate.referralsCount}</span> · Actifs : <span className="font-bold text-green-400">{selectedClientAffiliate.activeReferralsCount}</span> · Relances : <span className="font-bold text-yellow-300">{Number(selectedClientAffiliate.followUpRequiredCount || 0)}</span>
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[980px] text-xs">
+                          <thead className="bg-[#111] text-gray-500 uppercase tracking-wider">
+                            <tr>
+                              <th className="p-3 text-left">Source</th>
+                              <th className="p-3 text-left">Statut lead</th>
+                              <th className="p-3 text-left">Plan</th>
+                              <th className="p-3 text-left">Statut abo</th>
+                              <th className="p-3 text-left">Dernier événement</th>
+                              <th className="p-3 text-left">Inscription</th>
+                              <th className="p-3 text-left">Mise à jour</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-800">
+                            {selectedClientLeadHistory.length === 0 ? (
+                              <tr>
+                                <td className="p-4 text-gray-500" colSpan={7}>Aucun événement lead trouvé pour cet email.</td>
+                              </tr>
+                            ) : selectedClientLeadHistory.map((lead) => (
+                              <tr key={lead.id}>
+                                <td className="p-3 text-gray-300">{lead.source}</td>
+                                <td className="p-3 text-white">{lead.status}</td>
+                                <td className="p-3 text-gray-300">{formatPlanLabel(lead.subscriptionPlan)}</td>
+                                <td className="p-3 text-gray-300">{formatSubscriptionStatusLabel(lead.subscriptionStatus)}</td>
+                                <td className="p-3 text-gray-400">{lead.lastEvent || 'captured'}</td>
+                                <td className="p-3 text-gray-400">{formatDateLabel(lead.createdAt)}</td>
+                                <td className="p-3 text-gray-400">{formatRelativeTime(lead.updatedAt)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
                 <div className="bg-black border border-gray-800 rounded-lg p-4">
                   <p className="text-xs text-gray-500 uppercase tracking-wider">Leads captures</p>
@@ -2640,10 +3144,136 @@ const AdminConsole: React.FC<{
               <div className="bg-black border border-gray-800 rounded-lg overflow-hidden">
                 <div className="p-4 border-b border-gray-800 flex items-center justify-between">
                   <div>
+                    <h3 className="text-lg font-bold text-white">Historique des comptes créés</h3>
+                    <p className="text-xs text-gray-500 mt-1">Comptes existants avec date d inscription, plan et statut.</p>
+                  </div>
+                  <span className="text-xs text-gray-500">{filteredCrmAccountsHistory.length} compte{filteredCrmAccountsHistory.length > 1 ? 's' : ''}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[980px] text-xs">
+                    <thead className="bg-[#111] text-gray-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="p-3 text-left">Email</th>
+                        <th className="p-3 text-left">Plan</th>
+                        <th className="p-3 text-left">Statut abo</th>
+                        <th className="p-3 text-left">VIP</th>
+                        <th className="p-3 text-left">Date de création</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800">
+                      {filteredCrmAccountsHistory.length === 0 ? (
+                        <tr>
+                          <td className="p-4 text-gray-500" colSpan={5}>Aucun compte enregistré.</td>
+                        </tr>
+                      ) : filteredCrmAccountsHistory.map((account) => {
+                        const accountPermissions = getUserPermissions(account as SessionUser);
+                        return (
+                          <tr key={account.id}>
+                            <td className="p-3 text-gray-200">{account.email}</td>
+                            <td className="p-3 text-gray-300">{formatPlanLabel(account.subscriptionPlan || 'NONE')}</td>
+                            <td className="p-3 text-gray-300">{formatSubscriptionStatusLabel(account.subscriptionStatus || 'NONE')}</td>
+                            <td className="p-3">
+                              <span className={accountPermissions.vipAccess ? 'text-green-400 font-bold' : 'text-gray-400'}>
+                                {accountPermissions.vipAccess ? 'Actif' : 'Inactif'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-gray-400">{formatDateLabel(account.createdAt)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="bg-black border border-gray-800 rounded-lg overflow-hidden">
+                <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Parrains et filleuls</h3>
+                    <p className="text-xs text-gray-500 mt-1">Suivi filleuls : statut d abonnement, canal de paiement, commission (50% en crypto manuel) et besoin de relance.</p>
+                  </div>
+                  <span className="text-xs text-gray-500">{filteredCrmAffiliates.length} parrain{filteredCrmAffiliates.length > 1 ? 's' : ''}</span>
+                </div>
+                {filteredCrmAffiliates.length === 0 ? (
+                  <div className="p-4 text-sm text-gray-500">Aucun parrain avec des filleuls pour le moment.</div>
+                ) : (
+                  <div className="space-y-4 p-4">
+                    {filteredCrmAffiliates.slice(0, 80).map((affiliate) => (
+                      <div key={`${affiliate.ownerUserId || affiliate.ownerEmail}`} className="border border-gray-800 rounded-lg bg-[#0f0f0f] overflow-hidden">
+                        <div className="px-4 py-3 border-b border-gray-800 flex flex-wrap items-center gap-3 justify-between">
+                          <div>
+                            <p className="text-sm font-bold text-white">{affiliate.ownerEmail}</p>
+                            <p className="text-xs text-gray-500">Code parrain : {affiliate.referralCode || '-'}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="px-2 py-1 rounded border border-gray-700 text-gray-300">{affiliate.referralsCount} filleul{affiliate.referralsCount > 1 ? 's' : ''}</span>
+                            <span className="px-2 py-1 rounded border border-green-500/30 text-green-400">{affiliate.activeReferralsCount} actif{affiliate.activeReferralsCount > 1 ? 's' : ''}</span>
+                            <span className="px-2 py-1 rounded border border-yellow-500/30 text-yellow-300">{Number(affiliate.followUpRequiredCount || 0)} relance{Number(affiliate.followUpRequiredCount || 0) > 1 ? 's' : ''}</span>
+                            <span className="px-2 py-1 rounded border border-primary/40 text-primary">{affiliate.totalCommissionAmount.toFixed(2)}€ cumulé</span>
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[980px] text-xs">
+                            <thead className="bg-[#111] text-gray-500 uppercase tracking-wider">
+                              <tr>
+                                <th className="p-3 text-left">Filleul</th>
+                                <th className="p-3 text-left">Plan</th>
+                                <th className="p-3 text-left">Abonnement</th>
+                                <th className="p-3 text-left">Canal paiement</th>
+                                <th className="p-3 text-left">Commission</th>
+                                <th className="p-3 text-left">Mode commission</th>
+                                <th className="p-3 text-left">Relance</th>
+                                <th className="p-3 text-left">Inscription</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-800">
+                              {affiliate.referrals.map((referral) => (
+                                <tr key={referral.id}>
+                                  <td className="p-3 text-gray-200">{referral.pseudo}</td>
+                                  <td className="p-3 text-gray-300">{formatPlanLabel(referral.subscriptionPlan)}</td>
+                                  <td className="p-3">
+                                    <div className="space-y-1">
+                                      <span className={referral.subscriptionActive ? 'text-green-400 font-bold' : 'text-gray-300'}>
+                                        {referral.subscriptionActive ? 'Actif' : 'Inactif'}
+                                      </span>
+                                      <p className="text-[11px] text-gray-500">{formatSubscriptionStatusLabel(referral.subscriptionStatus || 'NONE')}</p>
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-gray-300">{formatPaymentProviderLabel(referral.paymentProvider)}</td>
+                                  <td className="p-3">
+                                    <div className="space-y-1">
+                                      <span className="text-primary font-bold">{Number(referral.commissionAmount || 0).toFixed(2)}€</span>
+                                      <p className="text-[11px] text-gray-500">
+                                        {(() => {
+                                          const commissionModel = String(referral.commissionModel || '').toUpperCase();
+                                          if (commissionModel === 'LEMON_AFFILIATE_EXTERNAL') return 'Géré par Lemon';
+                                          if (commissionModel === 'LEMON_CARD_INTERNAL_DISABLED') return 'Pas de partage interne';
+                                          return formatCommissionStatus(referral.commissionStatus);
+                                        })()}
+                                      </p>
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-gray-300">{formatCommissionModelLabel(referral.commissionModel)}</td>
+                                  <td className="p-3 text-gray-300">{formatFollowUpLabel(referral.followUpRequired, referral.paymentProvider)}</td>
+                                  <td className="p-3 text-gray-400">{formatDateLabel(referral.joinedAt)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-black border border-gray-800 rounded-lg overflow-hidden">
+                <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                  <div>
                     <h3 className="text-lg font-bold text-white">Derniers leads</h3>
                     <p className="text-xs text-gray-500 mt-1">Capture email + progression jusqu'a activation VIP.</p>
                   </div>
-                  <span className="text-xs text-gray-500">{crmLeads.length} enregistres</span>
+                  <span className="text-xs text-gray-500">{filteredCrmLeads.length} enregistres</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[1100px] text-xs">
@@ -2662,11 +3292,11 @@ const AdminConsole: React.FC<{
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-800">
-                      {crmLeads.length === 0 ? (
+                      {filteredCrmLeads.length === 0 ? (
                         <tr>
                           <td className="p-4 text-gray-500" colSpan={10}>Aucun lead pour le moment.</td>
                         </tr>
-                      ) : crmLeads.slice(0, 120).map((lead) => (
+                      ) : filteredCrmLeads.slice(0, 120).map((lead) => (
                         <tr key={lead.id}>
                           <td className="p-3 text-gray-200">{lead.email}</td>
                           <td className="p-3 text-gray-400">{lead.source}</td>
@@ -2947,10 +3577,30 @@ const AdminConsole: React.FC<{
                       <option value="">Nouvelle publication</option>
                       {posts.map((post) => (
                         <option key={post.id} value={post.id}>
-                          [{String(post.publicationStatus || 'PUBLISHED').toUpperCase() === 'DRAFT' ? 'BROUILLON' : 'PUBLIE'} · {post.type === ContentType.TRADE_SIGNAL ? 'SIGNAL' : 'BLOG'}] {post.title}
+                          [{String(post.publicationStatus || 'PUBLISHED').toUpperCase() === 'DRAFT' ? 'BROUILLON' : 'PUBLIE'} · {inferManualPublishTargetFromPost(post) === 'BLOG' ? 'BLOG' : inferManualPublishTargetFromPost(post) === 'CRYPTO' ? 'SIGNAL CRYPTO' : 'SIGNAL BOURSE'}] {post.title}
                         </option>
                       ))}
                     </select>
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <button
+                        onClick={() => setManualPublishTarget('BLOG')}
+                        className={`py-2 px-3 rounded border text-sm font-bold transition-colors ${manualPublishTarget === 'BLOG' ? 'bg-primary text-black border-primary' : 'bg-transparent text-gray-300 border-gray-700 hover:border-gray-500 hover:text-white'}`}
+                      >
+                        Publier blog
+                      </button>
+                      <button
+                        onClick={() => setManualPublishTarget('BOURSE')}
+                        className={`py-2 px-3 rounded border text-sm font-bold transition-colors ${manualPublishTarget === 'BOURSE' ? 'bg-primary text-black border-primary' : 'bg-transparent text-gray-300 border-gray-700 hover:border-gray-500 hover:text-white'}`}
+                      >
+                        Publier partie bourse
+                      </button>
+                      <button
+                        onClick={() => setManualPublishTarget('CRYPTO')}
+                        className={`py-2 px-3 rounded border text-sm font-bold transition-colors ${manualPublishTarget === 'CRYPTO' ? 'bg-primary text-black border-primary' : 'bg-transparent text-gray-300 border-gray-700 hover:border-gray-500 hover:text-white'}`}
+                      >
+                        Publier partie crypto
+                      </button>
+                    </div>
                   </div>
                   <input value={editorTitle} onChange={(e) => setEditorTitle(e.target.value)} placeholder="Titre" className="w-full bg-[#111] border border-gray-700 rounded p-3 text-sm text-white" />
                   <textarea value={editorExcerpt} onChange={(e) => setEditorExcerpt(e.target.value)} placeholder="Résumé court" className="w-full h-24 bg-[#111] border border-gray-700 rounded p-3 text-sm text-white" />
@@ -2962,10 +3612,16 @@ const AdminConsole: React.FC<{
                   </label>
                   <label className="flex items-center gap-2 text-sm text-gray-300">
                     <input type="checkbox" checked={editorDraft} onChange={(e) => setEditorDraft(e.target.checked)} />
-                    Brouillon admin (non publié sur le blog)
+                    Brouillon admin (non publié)
                   </label>
                   <button onClick={handleManualPublish} className="w-full bg-white text-black font-bold py-3 rounded hover:bg-gray-200">
-                    {selectedPostId ? 'Mettre a jour sans coder' : 'Publier sans coder'}
+                    {selectedPostId
+                      ? 'Mettre a jour sans coder'
+                      : manualPublishTarget === 'BLOG'
+                        ? 'Publier blog'
+                        : manualPublishTarget === 'BOURSE'
+                          ? 'Publier partie bourse'
+                          : 'Publier partie crypto'}
                   </button>
                 </div>
               </div>
@@ -3273,7 +3929,7 @@ const Home: React.FC<{
           </div>
         </div>
 
-        <div className="bg-surface border border-gray-800 rounded-xl p-6 mb-12">
+        <div id="plans" className="bg-surface border border-gray-800 rounded-xl p-6 mb-12">
           <h3 className="text-2xl font-bold text-white mb-2">Choisissez votre formule</h3>
           <div className="grid md:grid-cols-3 gap-4">
             {SUBSCRIPTION_PLANS.map((plan) => (
@@ -3296,8 +3952,6 @@ const Home: React.FC<{
             ))}
           </div>
         </div>
-
-        <MethodologyProofPanel />
 
         <div className="grid md:grid-cols-3 gap-8">
           <div className="md:col-span-2">
@@ -3343,8 +3997,8 @@ const Home: React.FC<{
                 <p className="text-gray-400">Journal, Black Academy, dashboards et signaux structurés.</p>
               </div>
               <div>
-                <p className="text-white font-bold">Pourquoi une grande communauté aide ?</p>
-                <p className="text-gray-400">Vous lisez le marché avec d'autres membres, vous restez motivé, vous partagez vos convictions et vous gardez plus de discipline chaque semaine.</p>
+                <p className="text-white font-bold">Pourquoi une grande communauté ?</p>
+                <p className="text-gray-400">Vous vous interrogez peut-être quant aux raisons de mon engagement malgré ma position actuelle.  Il est important de préciser que mes actions ne sont pas motivées uniquement par un sentiment de sympathie.  Si la communauté atteint une taille critique et que nous adoptons une position commune, nous pourrons potentiellement influencer favorablement le marché en notre faveur.</p>
               </div>
             </div>
           </div>
@@ -3370,153 +4024,212 @@ const Home: React.FC<{
   );
 };
 
-const StarterKitPage: React.FC<{ onOpenSignup: () => void; onSubscribe: () => void }> = ({ onOpenSignup, onSubscribe }) => (
-  <div className="max-w-6xl mx-auto px-4 py-10">
-    <div className="mb-8">
-      <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Starter Kit</p>
-      <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">Parcours de demarrage trading (gratuit)</h1>
-      <p className="text-gray-400 max-w-3xl">
-        Ce kit vous donne une base claire avant toute prise de risque: vocabulaire, plateformes, routine quotidienne et premier exercice pratique.
-      </p>
-    </div>
+const StarterKitPage: React.FC<{ onOpenSignup: () => void; onSubscribe: () => void }> = ({ onOpenSignup, onSubscribe }) => {
+  const [activeModule, setActiveModule] = useState<'module-1' | 'module-2'>('module-1');
 
-    <div className="grid lg:grid-cols-3 gap-6 mb-10">
-      <div className="lg:col-span-2 bg-surface border border-gray-800 rounded-2xl p-6">
-        <h2 className="text-xl font-bold text-white mb-4">Parcours debutant en 4 etapes</h2>
-        <div className="space-y-3 text-sm">
-          <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
-            <p className="text-primary font-bold mb-1">Etape 1 - Comprendre le jargon</p>
-            <p className="text-gray-300">Apprenez les termes indispensables: SL, TP, R:R, volatilite, liquidite, breakout, fakeout.</p>
-          </div>
-          <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
-            <p className="text-primary font-bold mb-1">Etape 2 - Choisir votre plateforme</p>
-            <p className="text-gray-300">Selectionnez un broker/plateforme selon marche vise, frais, regulation, securite et execution.</p>
-          </div>
-          <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
-            <p className="text-primary font-bold mb-1">Etape 3 - Regles de risque de base</p>
-            <p className="text-gray-300">Risque max 0.5%-1% par trade, taille de position calculee, stop obligatoire.</p>
-          </div>
-          <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
-            <p className="text-primary font-bold mb-1">Etape 4 - Routine quotidienne</p>
-            <p className="text-gray-300">Verifier contexte macro, attendre un setup propre, documenter chaque execution.</p>
-          </div>
-        </div>
-      </div>
-      <div className="bg-black border border-primary/30 rounded-2xl p-6">
-        <h3 className="text-lg font-bold text-white mb-2">Extrait de formation</h3>
-        <p className="text-sm text-gray-400 mb-4">
-          Module "Survie": comment eviter les erreurs classiques des debutants.
-        </p>
-        <ul className="text-sm text-gray-300 space-y-2 mb-5">
-          <li>• Difference entre signal et plan d execution</li>
-          <li>• Pourquoi le stop loss n est pas negociable</li>
-          <li>• Comment lire un ratio risque/recompense</li>
-          <li>• Checklist avant de cliquer "buy/sell"</li>
-        </ul>
-        <button onClick={onOpenSignup} className="w-full bg-primary text-black font-bold py-3 rounded hover:bg-primary-dark transition-colors">
-          Creer un compte gratuit
-        </button>
-      </div>
-    </div>
+  const goToPlans = () => {
+    window.location.assign('/#plans');
+  };
 
-    <div className="bg-surface border border-gray-800 rounded-2xl p-6 mb-10">
-      <h2 className="text-xl font-bold text-white mb-4">Comment choisir sa plateforme de trading</h2>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="bg-[#111] text-gray-500 uppercase text-xs">
-            <tr>
-              <th className="p-3">Critere</th>
-              <th className="p-3">A verifier</th>
-              <th className="p-3">Signal d alerte</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-800">
-            <tr>
-              <td className="p-3 text-white">Regulation</td>
-              <td className="p-3 text-gray-300">Licence claire, entite legale, documents accessibles</td>
-              <td className="p-3 text-red-400">Aucune info legale publique</td>
-            </tr>
-            <tr>
-              <td className="p-3 text-white">Frais</td>
-              <td className="p-3 text-gray-300">Spreads, commissions, frais de retrait</td>
-              <td className="p-3 text-red-400">Frais caches ou imprécis</td>
-            </tr>
-            <tr>
-              <td className="p-3 text-white">Execution</td>
-              <td className="p-3 text-gray-300">Stabilite, latence, disponibilite mobile/desktop</td>
-              <td className="p-3 text-red-400">Freeze frequent en volatilite</td>
-            </tr>
-            <tr>
-              <td className="p-3 text-white">Securite compte</td>
-              <td className="p-3 text-gray-300">2FA, alertes connexion, gestion devices</td>
-              <td className="p-3 text-red-400">Pas de 2FA ou options limitees</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+  const modules = {
+    'module-1': {
+      title: 'Module 1 - Comprendre le jargon',
+      intro: 'Objectif : lire un signal sans confusion.',
+      points: [
+        'SL = Stop Loss : votre invalidation maximale.',
+        'TP = Take Profit : zone de prise de bénéfice.',
+        'R:R = ratio risque / rendement attendu.',
+        'Breakout vs fakeout : vraie cassure ou piège.'
+      ],
+      exercice: 'Prenez un signal exemple et identifiez : entrée, SL, TP et R:R.'
+    },
+    'module-2': {
+      title: 'Module 2 - Choisir votre plateforme',
+      intro: 'Objectif : éviter les mauvaises plateformes et les frais cachés.',
+      points: [
+        'Vérifiez la régulation et l’entité légale.',
+        'Comparez spreads, commissions et frais de retrait.',
+        'Testez l’exécution en volatilité.',
+        'Activez le 2FA avant tout dépôt.'
+      ],
+      exercice: 'Comparez 2 plateformes et gardez celle avec exécution stable + frais clairs.'
+    }
+  } as const;
 
-    <div className="grid lg:grid-cols-[1.2fr,0.8fr] gap-6">
-      <div className="bg-black border border-gray-800 rounded-2xl overflow-hidden">
-        <div className="aspect-video">
-          <iframe
-            className="w-full h-full"
-            src="https://www.youtube-nocookie.com/embed/8fH7Z5vFd0A"
-            title="Starter kit trading - choix de plateforme"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerPolicy="strict-origin-when-cross-origin"
-            loading="lazy"
-            allowFullScreen
-          />
-        </div>
-        <div className="p-3 border-t border-gray-800 text-xs">
-          <a href="https://www.youtube.com/watch?v=8fH7Z5vFd0A" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-white">
-            Ouvrir la vidéo directement sur YouTube
-          </a>
-        </div>
-      </div>
-      <div className="bg-gradient-to-br from-[#08140f] to-black border border-primary/30 rounded-2xl p-6">
-        <h3 className="text-xl font-bold text-white mb-3">Suite du parcours</h3>
-        <p className="text-sm text-gray-300 mb-4">
-          Une fois ce starter termine, vous pouvez passer aux signaux VIP selon votre plan (Bourse, Crypto ou Combo).
-        </p>
-        <div className="space-y-3 text-sm text-gray-300 mb-6">
-          <div className="bg-black/40 border border-gray-800 rounded p-3">1. Creer un compte</div>
-          <div className="bg-black/40 border border-gray-800 rounded p-3">2. Finir les bases de la formation</div>
-          <div className="bg-black/40 border border-gray-800 rounded p-3">3. Debloquer le plan adapte a votre marche</div>
-        </div>
-        <button onClick={onSubscribe} className="w-full bg-primary text-black font-bold py-3 rounded hover:bg-primary-dark transition-colors">
-          Voir les plans VIP
-        </button>
-      </div>
-    </div>
-
-    <div className="mt-10 bg-black border border-gray-800 rounded-2xl overflow-hidden">
-      <div className="p-5 border-b border-gray-800">
-        <h2 className="text-xl font-bold text-white">Video recommandee: choisir sa plateforme de trading</h2>
-        <p className="text-sm text-gray-400 mt-2">
-          Ressource complémentaire pour comparer les plateformes avant d ouvrir un compte réel.
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-10">
+      <div className="mb-8">
+        <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Starter Kit</p>
+        <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">Parcours de demarrage trading (gratuit)</h1>
+        <p className="text-gray-400 max-w-3xl">
+          Ce kit vous donne une base claire avant toute prise de risque : vocabulaire, plateformes, routine quotidienne et premier exercice pratique.
         </p>
       </div>
-      <div className="aspect-video">
-        <iframe
-          className="w-full h-full"
-          src="https://www.youtube-nocookie.com/embed/8fH7Z5vFd0A"
-          title="Comment choisir une plateforme de trading"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          referrerPolicy="strict-origin-when-cross-origin"
-          loading="lazy"
-          allowFullScreen
-        />
+
+      <div className="grid lg:grid-cols-3 gap-6 mb-10">
+        <div className="lg:col-span-2 bg-surface border border-gray-800 rounded-2xl p-6">
+          <h2 className="text-xl font-bold text-white mb-4">Parcours debutant en 4 etapes</h2>
+          <div className="space-y-3 text-sm">
+            <div id="module-1" className="bg-black/40 border border-gray-800 rounded-lg p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-primary font-bold mb-1">Etape 1 - Comprendre le jargon</p>
+                  <p className="text-gray-300">Module gratuit, immédiatement accessible.</p>
+                </div>
+                <button
+                  onClick={() => setActiveModule('module-1')}
+                  className={`px-4 py-2 rounded font-bold text-xs transition-colors ${activeModule === 'module-1' ? 'bg-primary text-black' : 'border border-gray-600 text-gray-200 hover:border-white hover:text-white'}`}
+                  aria-pressed={activeModule === 'module-1'}
+                >
+                  Ouvrir le module
+                </button>
+              </div>
+            </div>
+
+            <div id="module-2" className="bg-black/40 border border-gray-800 rounded-lg p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-primary font-bold mb-1">Etape 2 - Choisir votre plateforme</p>
+                  <p className="text-gray-300">Module gratuit, immédiatement accessible.</p>
+                </div>
+                <button
+                  onClick={() => setActiveModule('module-2')}
+                  className={`px-4 py-2 rounded font-bold text-xs transition-colors ${activeModule === 'module-2' ? 'bg-primary text-black' : 'border border-gray-600 text-gray-200 hover:border-white hover:text-white'}`}
+                  aria-pressed={activeModule === 'module-2'}
+                >
+                  Ouvrir le module
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-primary font-bold mb-1">Etape 3 - Regles de risque de base</p>
+                  <p className="text-gray-300">Module réservé aux abonnés.</p>
+                </div>
+                <button
+                  onClick={goToPlans}
+                  className="px-4 py-2 rounded font-bold text-xs bg-white text-black hover:bg-gray-200 transition-colors flex items-center gap-1"
+                >
+                  Débloquer <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-primary font-bold mb-1">Etape 4 - Routine quotidienne</p>
+                  <p className="text-gray-300">Module réservé aux abonnés.</p>
+                </div>
+                <button
+                  onClick={goToPlans}
+                  className="px-4 py-2 rounded font-bold text-xs bg-white text-black hover:bg-gray-200 transition-colors flex items-center gap-1"
+                >
+                  Débloquer <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-black border border-primary/30 rounded-2xl p-6">
+          <h3 className="text-lg font-bold text-white mb-2">Module actif</h3>
+          <p className="text-sm text-gray-400 mb-4">{modules[activeModule].intro}</p>
+          <h4 className="text-white font-bold mb-3">{modules[activeModule].title}</h4>
+          <ul className="text-sm text-gray-300 space-y-2 mb-5">
+            {modules[activeModule].points.map((point) => (
+              <li key={point}>• {point}</li>
+            ))}
+          </ul>
+          <div className="bg-black/50 border border-gray-800 rounded p-3 text-xs text-gray-300 mb-5">
+            <span className="text-primary font-bold">Exercice pratique :</span> {modules[activeModule].exercice}
+          </div>
+          <button onClick={onOpenSignup} className="w-full bg-primary text-black font-bold py-3 rounded hover:bg-primary-dark transition-colors">
+            Créer un compte gratuit
+          </button>
+        </div>
       </div>
-      <div className="p-3 border-t border-gray-800 text-xs">
-        <a href="https://www.youtube.com/watch?v=8fH7Z5vFd0A" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-white">
-          Ouvrir la vidéo sur YouTube
-        </a>
+
+      <div className="bg-surface border border-gray-800 rounded-2xl p-6 mb-10">
+        <h2 className="text-xl font-bold text-white mb-4">Comment choisir sa plateforme de trading</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="bg-[#111] text-gray-500 uppercase text-xs">
+              <tr>
+                <th className="p-3">Critere</th>
+                <th className="p-3">A verifier</th>
+                <th className="p-3">Signal d alerte</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-800">
+              <tr>
+                <td className="p-3 text-white">Regulation</td>
+                <td className="p-3 text-gray-300">Licence claire, entite legale, documents accessibles</td>
+                <td className="p-3 text-red-400">Aucune info legale publique</td>
+              </tr>
+              <tr>
+                <td className="p-3 text-white">Frais</td>
+                <td className="p-3 text-gray-300">Spreads, commissions, frais de retrait</td>
+                <td className="p-3 text-red-400">Frais caches ou imprécis</td>
+              </tr>
+              <tr>
+                <td className="p-3 text-white">Execution</td>
+                <td className="p-3 text-gray-300">Stabilite, latence, disponibilite mobile/desktop</td>
+                <td className="p-3 text-red-400">Freeze frequent en volatilite</td>
+              </tr>
+              <tr>
+                <td className="p-3 text-white">Securite compte</td>
+                <td className="p-3 text-gray-300">2FA, alertes connexion, gestion devices</td>
+                <td className="p-3 text-red-400">Pas de 2FA ou options limitees</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      <div className="grid lg:grid-cols-[1.2fr,0.8fr] gap-6">
+        <div id="starter-video" className="bg-black border border-gray-800 rounded-2xl overflow-hidden">
+          <div className="aspect-video">
+            <iframe
+              className="w-full h-full"
+              src="https://www.youtube-nocookie.com/embed/8fH7Z5vFd0A"
+              title="Starter kit trading - choix de plateforme"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              loading="lazy"
+              allowFullScreen
+            />
+          </div>
+          <div className="p-3 border-t border-gray-800 text-xs">
+            <a href="https://www.youtube.com/watch?v=8fH7Z5vFd0A" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-white">
+              Ouvrir la vidéo directement sur YouTube
+            </a>
+          </div>
+        </div>
+        <div className="bg-gradient-to-br from-[#08140f] to-black border border-primary/30 rounded-2xl p-6">
+          <h3 className="text-xl font-bold text-white mb-3">Suite du parcours</h3>
+          <p className="text-sm text-gray-300 mb-4">
+            Une fois les 2 modules gratuits terminés, vous débloquez le reste de la formation via la formule adaptée (Bourse, Crypto ou Combo).
+          </p>
+          <div className="space-y-3 text-sm text-gray-300 mb-6">
+            <div className="bg-black/40 border border-gray-800 rounded p-3">1. Créer un compte</div>
+            <div className="bg-black/40 border border-gray-800 rounded p-3">2. Terminer les modules 1 et 2</div>
+            <div className="bg-black/40 border border-gray-800 rounded p-3">3. Choisir la formule à souscrire</div>
+          </div>
+          <button onClick={goToPlans} className="w-full bg-primary text-black font-bold py-3 rounded hover:bg-primary-dark transition-colors">
+            Voir les formules
+          </button>
+          <button onClick={onSubscribe} className="w-full mt-3 border border-gray-600 text-gray-200 font-bold py-3 rounded hover:border-white hover:text-white transition-colors">
+            Ouvrir la modale d abonnement
+          </button>
+        </div>
+      </div>
+
     </div>
-  </div>
-);
+  );
+};
 
 const Blog: React.FC<{ posts: Post[] }> = ({ posts }) => {
   const articles = posts.filter((p) => p.type === ContentType.ARTICLE && isPostPublished(p));
@@ -3538,77 +4251,130 @@ const Blog: React.FC<{ posts: Post[] }> = ({ posts }) => {
   );
 };
 
-const SamplePage: React.FC<{ onSubscribe: () => void; reviews: Review[] }> = ({ onSubscribe, reviews }) => {
-  const approvedReviews = reviews
-    .filter((review) => review.status === 'APPROVED' && review.createdAt)
-    .map((review) => {
-      const createdMs = Date.parse(String(review.createdAt || ''));
-      if (!Number.isFinite(createdMs)) return null;
-      const dayDiff = Math.abs(Math.round((Date.now() - createdMs) / (1000 * 60 * 60 * 24)));
-      return { review, dayDiff };
-    })
-    .filter((entry): entry is { review: Review; dayDiff: number } => Boolean(entry))
-    .sort((a, b) => Math.abs(a.dayDiff - 7) - Math.abs(b.dayDiff - 7));
-
-  const selectedReview = approvedReviews[0]?.review || null;
-  const selectedReviewDays = approvedReviews[0]?.dayDiff ?? null;
-  const safeVideoUrl = selectedReview?.videoUrl && isSafeExternalUrl(selectedReview.videoUrl) ? selectedReview.videoUrl : null;
-
+const SamplePage: React.FC<{ onSubscribe: () => void; reviews: Review[] }> = ({ onSubscribe }) => {
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
+    <div className="max-w-5xl mx-auto px-4 py-12">
       <div className="text-center mb-10">
-        <h1 className="text-3xl font-bold mb-3">Exemple VIP basé sur un vrai avis</h1>
-        <p className="text-gray-400">Cette page affiche automatiquement l'avis public approuvé le plus proche de J-7.</p>
+        <h1 className="text-3xl font-bold mb-3">Signal du 01/02/2026</h1>
+        <p className="text-gray-400">
+          Exemple pédagogique de présentation VIP avec plan d exécution complet.
+        </p>
       </div>
 
-      {!selectedReview ? (
-        <div className="bg-surface border border-gray-800 rounded-xl p-8 text-center">
-          <p className="text-gray-300">Aucun avis public avec date exploitable pour le moment.</p>
+      <div className="bg-surface border border-primary/40 rounded-xl p-6 md:p-8 mb-8">
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <span className="text-[11px] uppercase tracking-wider px-2 py-1 rounded border border-gray-700 text-gray-300 bg-black/40">Marché : Crypto</span>
+          <span className="text-[11px] uppercase tracking-wider px-2 py-1 rounded border border-green-500/30 text-green-300 bg-green-500/10">Direction : Long</span>
+          <span className="text-[11px] uppercase tracking-wider px-2 py-1 rounded border border-gray-700 text-gray-300 bg-black/40">Actif : BTC/USD</span>
         </div>
-      ) : (
-        <div className="bg-surface border border-primary/50 rounded-xl p-8 mb-8 shadow-2xl">
-          <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-            <div>
-              <h3 className="text-2xl font-bold text-white mb-1">{selectedReview.author}</h3>
-              <p className="text-sm text-gray-400">
-                Publié {selectedReview.createdAt ? formatRelativeTime(selectedReview.createdAt) : selectedReview.date}
-                {selectedReviewDays !== null ? ` (≈ J-${selectedReviewDays})` : ''}
-              </p>
-            </div>
-            <div className="flex items-center gap-1">
-              {[...Array(Math.max(1, Math.min(5, selectedReview.rating || 5)))].map((_, index) => (
-                <Star key={index} size={16} fill="#00ff9d" stroke="none" />
-              ))}
-            </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">Entrée</p>
+            <p className="text-xl font-bold text-white">42 180</p>
           </div>
-
-          <div className="bg-black/40 border border-gray-800 rounded-lg p-4 mb-5">
-            <p className="text-gray-200 italic">"{selectedReview.content}"</p>
+          <div className="bg-black/40 border border-red-500/30 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">Stop Loss</p>
+            <p className="text-xl font-bold text-red-400">41 520</p>
           </div>
-
-          {selectedReview.analysis && (
-            <div className="bg-black/40 border border-gray-800 rounded-lg p-4 mb-5">
-              <p className="text-xs uppercase tracking-widest text-primary mb-2">Analyse détaillée</p>
-              <p className="text-gray-300 whitespace-pre-wrap">{selectedReview.analysis}</p>
-            </div>
-          )}
-
-          {safeVideoUrl && (
-            <a
-              href={safeVideoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-primary text-sm font-bold hover:text-white"
-            >
-              <Video size={16} />
-              Voir la vidéo associée
-            </a>
-          )}
+          <div className="bg-black/40 border border-primary/30 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">Take Profit 1</p>
+            <p className="text-xl font-bold text-primary">42 960</p>
+          </div>
+          <div className="bg-black/40 border border-primary/30 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">Take Profit 2</p>
+            <p className="text-xl font-bold text-primary">43 540</p>
+          </div>
         </div>
-      )}
+
+        <div className="grid md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-primary mb-2">Plan de gestion</p>
+            <ul className="space-y-2 text-sm text-gray-300">
+              <li>• Risque max : 1 % du capital</li>
+              <li>• Taille position : 2.5x spot équivalent</li>
+              <li>• Passage break-even après TP1 validé</li>
+              <li>• R:R cible global : 1:2.6</li>
+            </ul>
+          </div>
+          <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-primary mb-2">Invalidation</p>
+            <ul className="space-y-2 text-sm text-gray-300">
+              <li>• Clôture 1H sous 41 520</li>
+              <li>• Volume vendeur supérieur à la moyenne 20 périodes</li>
+              <li>• Perte du support 41 700 sans réaction acheteuse</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
+          <p className="text-xs uppercase tracking-wider text-primary mb-2">Résumé de l analyse</p>
+          <p className="text-sm text-gray-300 leading-relaxed">
+            Le signal est construit sur un retest de zone support 41 700 - 41 900, avec reprise de momentum sur RSI 15m et
+            maintien d une structure haussière en 4H. Le scénario principal vise une extension vers 42 960 puis 43 540.
+            Si le marché casse le support avec pression vendeuse, le plan est invalidé immédiatement.
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-surface border border-blue-500/40 rounded-xl p-6 md:p-8 mb-8">
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <span className="text-[11px] uppercase tracking-wider px-2 py-1 rounded border border-gray-700 text-gray-300 bg-black/40">Marché : Bourse</span>
+          <span className="text-[11px] uppercase tracking-wider px-2 py-1 rounded border border-red-500/30 text-red-300 bg-red-500/10">Direction : Short</span>
+          <span className="text-[11px] uppercase tracking-wider px-2 py-1 rounded border border-gray-700 text-gray-300 bg-black/40">Actif : NAS100</span>
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">Entrée</p>
+            <p className="text-xl font-bold text-white">18 460</p>
+          </div>
+          <div className="bg-black/40 border border-red-500/30 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">Stop Loss</p>
+            <p className="text-xl font-bold text-red-400">18 610</p>
+          </div>
+          <div className="bg-black/40 border border-blue-500/30 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">Take Profit 1</p>
+            <p className="text-xl font-bold text-blue-300">18 250</p>
+          </div>
+          <div className="bg-black/40 border border-blue-500/30 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">Take Profit 2</p>
+            <p className="text-xl font-bold text-blue-300">18 080</p>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-blue-300 mb-2">Plan de gestion</p>
+            <ul className="space-y-2 text-sm text-gray-300">
+              <li>• Risque max : 0.75 % du capital</li>
+              <li>• Exécution fractionnée en 2 entrées</li>
+              <li>• Réduction de 50 % de la position sur TP1</li>
+              <li>• R:R cible global : 1:2.5</li>
+            </ul>
+          </div>
+          <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
+            <p className="text-xs uppercase tracking-wider text-blue-300 mb-2">Invalidation</p>
+            <ul className="space-y-2 text-sm text-gray-300">
+              <li>• Clôture 15m au-dessus de 18 610</li>
+              <li>• Réintégration durable au-dessus de la zone 18 550</li>
+              <li>• Reprise haussière avec accélération des volumes cash</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="bg-black/40 border border-gray-800 rounded-lg p-4">
+          <p className="text-xs uppercase tracking-wider text-blue-300 mb-2">Résumé de l analyse</p>
+          <p className="text-sm text-gray-300 leading-relaxed">
+            Setup short basé sur un rejet net de la résistance intraday 18 540 - 18 580, avec divergence baissière RSI en 5m
+            et perte de momentum sur les futures US. Le scénario privilégie une extension vers 18 250 puis 18 080.
+            En cas de reprise solide au-dessus de 18 610, le plan est invalidé sans exception.
+          </p>
+        </div>
+      </div>
 
       <div className="text-center">
-        <p className="text-gray-400 mb-4">Accédez à la zone VIP pour suivre tous les retours membres et signaux.</p>
+        <p className="text-gray-400 mb-4">Accédez à la zone VIP pour suivre tous les signaux complets et leurs mises à jour.</p>
         <button onClick={onSubscribe} className="bg-primary text-black font-bold px-8 py-3 rounded hover:bg-primary-dark transition-all">
           Débloquer l'accès VIP
         </button>
@@ -3695,7 +4461,7 @@ const AffiliatePage: React.FC<{ currentUser: SessionUser | null; onOpenLogin: ()
       <div className="text-center mb-10">
         <Handshake className="w-14 h-14 text-primary mx-auto mb-4" />
         <h1 className="text-3xl font-bold mb-3 text-white">Espace partenaires</h1>
-        <p className="text-gray-400">Lien d'affiliation unique, suivi des filleuls et commissions dans le CRM admin.</p>
+        <p className="text-gray-400">Lien d'affiliation unique, suivi des filleuls et visibilité du mode de commission (crypto interne ou Lemon externe).</p>
       </div>
 
       <div className="bg-gradient-to-r from-yellow-900/20 to-black border border-yellow-500/30 rounded-xl p-6 mb-8">
@@ -3747,32 +4513,51 @@ const AffiliatePage: React.FC<{ currentUser: SessionUser | null; onOpenLogin: ()
           <h3 className="font-bold text-white">Filleuls rattachés</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-[#111] text-gray-500 text-xs uppercase">
               <tr>
                 <th className="p-3">Pseudo</th>
                 <th className="p-3">Plan</th>
                 <th className="p-3">Abonnement</th>
+                <th className="p-3">Canal</th>
                 <th className="p-3">Commission</th>
-                <th className="p-3">Statut</th>
+                <th className="p-3">Mode</th>
+                <th className="p-3">Relance</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
               {referrals.length === 0 ? (
                 <tr>
-                  <td className="p-4 text-gray-500" colSpan={5}>Aucun filleul pour le moment.</td>
+                  <td className="p-4 text-gray-500" colSpan={7}>Aucun filleul pour le moment.</td>
                 </tr>
               ) : referrals.map((referral) => (
                 <tr key={referral.id}>
                   <td className="p-3 text-gray-200">{referral.pseudo}</td>
                   <td className="p-3 text-gray-300">{formatPlanLabel(referral.subscriptionPlan)}</td>
                   <td className="p-3">
-                    <span className={referral.subscriptionActive ? 'text-green-400 font-bold' : 'text-gray-400'}>
-                      {referral.subscriptionActive ? 'Actif' : 'Inactif'}
-                    </span>
+                    <div className="space-y-1">
+                      <span className={referral.subscriptionActive ? 'text-green-400 font-bold' : 'text-gray-300'}>
+                        {referral.subscriptionActive ? 'Actif' : 'Inactif'}
+                      </span>
+                      <p className="text-[11px] text-gray-500">{formatSubscriptionStatusLabel(referral.subscriptionStatus || 'NONE')}</p>
+                    </div>
                   </td>
-                  <td className="p-3 text-primary font-bold">{Number(referral.commissionAmount || 0).toFixed(2)}€</td>
-                  <td className="p-3 text-gray-300">{formatCommissionStatus(referral.commissionStatus)}</td>
+                  <td className="p-3 text-gray-300">{formatPaymentProviderLabel(referral.paymentProvider)}</td>
+                  <td className="p-3">
+                    <div className="space-y-1">
+                      <span className="text-primary font-bold">{Number(referral.commissionAmount || 0).toFixed(2)}€</span>
+                      <p className="text-[11px] text-gray-500">
+                        {(() => {
+                          const commissionModel = String(referral.commissionModel || '').toUpperCase();
+                          if (commissionModel === 'LEMON_AFFILIATE_EXTERNAL') return 'Géré par Lemon';
+                          if (commissionModel === 'LEMON_CARD_INTERNAL_DISABLED') return 'Pas de partage interne';
+                          return formatCommissionStatus(referral.commissionStatus);
+                        })()}
+                      </p>
+                    </div>
+                  </td>
+                  <td className="p-3 text-gray-300">{formatCommissionModelLabel(referral.commissionModel)}</td>
+                  <td className="p-3 text-gray-300">{formatFollowUpLabel(referral.followUpRequired, referral.paymentProvider)}</td>
                 </tr>
               ))}
             </tbody>
@@ -4009,11 +4794,12 @@ const LoginModal: React.FC<{
   onClose: () => void;
   onLogin: (email: string, password: string) => void;
   onResendVerification: (email: string) => void;
+  onOpenPasswordReset: (email?: string) => void;
   onOpenSignup: () => void;
   socialProviders: Record<OAuthProvider, boolean>;
   oauthCallbackBaseUrl?: string;
   onSocialAuth: (provider: OAuthProvider, mode: 'login' | 'signup') => void;
-}> = ({ isOpen, onClose, onLogin, onResendVerification, onOpenSignup, socialProviders, oauthCallbackBaseUrl, onSocialAuth }) => {
+}> = ({ isOpen, onClose, onLogin, onResendVerification, onOpenPasswordReset, onOpenSignup, socialProviders, oauthCallbackBaseUrl, onSocialAuth }) => {
    const [email, setEmail] = useState('');
    const [password, setPassword] = useState('');
    if (!isOpen) return null;
@@ -4067,6 +4853,12 @@ const LoginModal: React.FC<{
                   <label className="text-xs text-gray-500 uppercase font-bold">Mot de passe</label>
                   <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-black border border-gray-700 rounded p-3 text-white focus:border-primary focus:outline-none" />
                </div>
+               <button
+                 onClick={() => onOpenPasswordReset(email)}
+                 className="text-left text-xs text-primary hover:underline"
+               >
+                 Mot de passe oublié ?
+               </button>
                <button onClick={() => onLogin(email, password)} className="w-full bg-primary text-black font-bold py-3 rounded hover:bg-primary-dark transition-colors">
                   SE CONNECTER
                </button>
@@ -4084,6 +4876,111 @@ const LoginModal: React.FC<{
          </div>
       </div>
    );
+};
+
+const ResetPasswordModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  initialEmail?: string;
+  initialToken?: string;
+  onRequestReset: (email: string) => Promise<boolean>;
+  onResetPassword: (token: string, newPassword: string) => Promise<boolean>;
+}> = ({ isOpen, onClose, initialEmail, initialToken, onRequestReset, onResetPassword }) => {
+  const [mode, setMode] = useState<'request' | 'reset'>('request');
+  const [email, setEmail] = useState('');
+  const [token, setToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const nextToken = (initialToken || '').trim();
+    setEmail(initialEmail || '');
+    setToken(nextToken);
+    setNewPassword('');
+    setMode(nextToken ? 'reset' : 'request');
+  }, [isOpen, initialEmail, initialToken]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+      <div className="bg-surface border border-gray-700 rounded-xl max-w-sm w-full p-8 relative max-h-[90vh] overflow-y-auto">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20} /></button>
+        <h2 className="text-2xl font-bold mb-2 text-center">Réinitialiser le mot de passe</h2>
+        <p className="text-xs text-gray-400 text-center mb-6">
+          {mode === 'request'
+            ? "Entrez votre email pour recevoir un lien de réinitialisation."
+            : "Collez le token reçu par email puis définissez un nouveau mot de passe."}
+        </p>
+
+        <div className="space-y-4">
+          {mode === 'request' ? (
+            <>
+              <div>
+                <label className="text-xs text-gray-500 uppercase font-bold">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className="w-full bg-black border border-gray-700 rounded p-3 text-white focus:border-primary focus:outline-none"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  const ok = await onRequestReset(email);
+                  if (ok) {
+                    setMode('reset');
+                  }
+                }}
+                className="w-full bg-primary text-black font-bold py-3 rounded hover:bg-primary-dark transition-colors"
+              >
+                Envoyer le lien
+              </button>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs text-gray-500 uppercase font-bold">Token de réinitialisation</label>
+                <input
+                  type="text"
+                  value={token}
+                  onChange={(event) => setToken(event.target.value)}
+                  className="w-full bg-black border border-gray-700 rounded p-3 text-white focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase font-bold">Nouveau mot de passe</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  className="w-full bg-black border border-gray-700 rounded p-3 text-white focus:border-primary focus:outline-none"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  const ok = await onResetPassword(token, newPassword);
+                  if (ok) {
+                    onClose();
+                  }
+                }}
+                className="w-full bg-primary text-black font-bold py-3 rounded hover:bg-primary-dark transition-colors"
+              >
+                Mettre à jour le mot de passe
+              </button>
+            </>
+          )}
+
+          <button
+            onClick={() => setMode((current) => (current === 'request' ? 'reset' : 'request'))}
+            className="w-full border border-gray-700 text-gray-300 font-bold py-2 rounded hover:border-gray-500 hover:text-white transition-colors text-sm"
+          >
+            {mode === 'request' ? "J'ai déjà un token" : "Revenir à la demande de lien"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const SignupModal: React.FC<{
@@ -4352,11 +5249,25 @@ const AccountModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   onLogout: () => void;
+  onDeleteAccount: (payload: { email: string; password: string; confirmText: string }) => Promise<boolean>;
   onResendVerification: () => void;
   onOpenAdmin: () => void;
   canOpenAdmin: boolean;
   user: SessionUser | null;
-}> = ({ isOpen, onClose, onLogout, onResendVerification, onOpenAdmin, canOpenAdmin, user }) => {
+}> = ({ isOpen, onClose, onLogout, onDeleteAccount, onResendVerification, onOpenAdmin, canOpenAdmin, user }) => {
+  const [showDangerZone, setShowDangerZone] = useState(false);
+  const [deleteEmail, setDeleteEmail] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  useEffect(() => {
+    if (!isOpen || !user) return;
+    setShowDangerZone(false);
+    setDeleteEmail(user.email);
+    setDeletePassword('');
+    setDeleteConfirmText('');
+  }, [isOpen, user]);
+
   if (!isOpen || !user) return null;
 
   const pseudo = user.email;
@@ -4517,23 +5428,25 @@ const AccountModal: React.FC<{
               <div className="bg-black border border-gray-800 rounded-lg overflow-hidden">
                 <div className="p-4 border-b border-gray-800">
                   <h4 className="font-bold text-white">Filleuls</h4>
-                  <p className="text-xs text-gray-500 mt-1">Pseudo du filleul, etat de l'abonnement et commission associee.</p>
+                  <p className="text-xs text-gray-500 mt-1">Plan, statut d abonnement, canal de paiement et commission associee.</p>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                  <table className="w-full min-w-[980px] text-left text-sm">
                     <thead className="bg-[#111] text-gray-500 text-xs uppercase">
                       <tr>
                         <th className="p-3">Pseudo</th>
                         <th className="p-3">Plan</th>
                         <th className="p-3">Abonnement</th>
+                        <th className="p-3">Canal</th>
                         <th className="p-3">Commission</th>
+                        <th className="p-3">Mode</th>
                         <th className="p-3">Doit recevoir</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-800">
                       {referrals.length === 0 ? (
                         <tr>
-                          <td className="p-4 text-gray-500" colSpan={5}>Aucun filleul pour le moment.</td>
+                          <td className="p-4 text-gray-500" colSpan={7}>Aucun filleul pour le moment.</td>
                         </tr>
                       ) : referrals.map((referral) => {
                         const shouldReceive = referral.subscriptionActive && referral.commissionAmount > 0;
@@ -4542,14 +5455,19 @@ const AccountModal: React.FC<{
                             <td className="p-3 text-white">{referral.pseudo}</td>
                             <td className="p-3 text-gray-300">{formatPlanLabel(referral.subscriptionPlan)}</td>
                             <td className="p-3">
-                              <span className={referral.subscriptionActive ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                                {referral.subscriptionActive ? 'Actif' : 'Inactif'}
-                              </span>
+                              <div className="space-y-1">
+                                <span className={referral.subscriptionActive ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                                  {referral.subscriptionActive ? 'Actif' : 'Inactif'}
+                                </span>
+                                <p className="text-[11px] text-gray-500">{formatSubscriptionStatusLabel(referral.subscriptionStatus || 'NONE')}</p>
+                              </div>
                             </td>
+                            <td className="p-3 text-gray-300">{formatPaymentProviderLabel(referral.paymentProvider)}</td>
                             <td className="p-3 text-primary font-bold">{referral.commissionAmount.toFixed(2)}€</td>
+                            <td className="p-3 text-gray-300">{formatCommissionModelLabel(referral.commissionModel)}</td>
                             <td className="p-3">
                               <span className={shouldReceive ? 'text-yellow-400 font-bold' : 'text-gray-500'}>
-                                {shouldReceive ? formatCommissionStatus(referral.commissionStatus) : 'Non'}
+                                {shouldReceive ? formatCommissionStatus(referral.commissionStatus) : formatFollowUpLabel(referral.followUpRequired, referral.paymentProvider)}
                               </span>
                             </td>
                           </tr>
@@ -4602,6 +5520,71 @@ const AccountModal: React.FC<{
           ) : (
             <div className="bg-black border border-gray-800 rounded-lg p-4 text-sm text-gray-400">
               Ce compte n'est pas encore inscrit au programme affiliation.
+            </div>
+          )}
+        </div>
+
+        <div className="mt-8 border border-red-500/40 bg-red-500/10 rounded-lg p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-red-300 font-bold">Zone sensible</h3>
+              <p className="text-xs text-red-200/80 mt-1">Action irréversible : suppression définitive du compte.</p>
+            </div>
+            <button
+              onClick={() => setShowDangerZone((value) => !value)}
+              className="border border-red-400/50 text-red-200 px-3 py-2 rounded text-sm font-bold hover:bg-red-500/20"
+            >
+              {showDangerZone ? 'Masquer' : 'Supprimer mon compte'}
+            </button>
+          </div>
+
+          {showDangerZone && (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-red-100/90">
+                Entrez votre email exact, votre mot de passe (si compte classique), puis tapez <strong>SUPPRIMER</strong>.
+              </p>
+              <div>
+                <label className="text-xs text-red-200 uppercase font-bold">Email de confirmation</label>
+                <input
+                  type="email"
+                  value={deleteEmail}
+                  onChange={(event) => setDeleteEmail(event.target.value)}
+                  className="w-full bg-black border border-red-500/40 rounded p-3 text-white focus:border-red-300 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-red-200 uppercase font-bold">Mot de passe actuel (optionnel si connexion sociale)</label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(event) => setDeletePassword(event.target.value)}
+                  className="w-full bg-black border border-red-500/40 rounded p-3 text-white focus:border-red-300 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-red-200 uppercase font-bold">Tapez SUPPRIMER</label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(event) => setDeleteConfirmText(event.target.value)}
+                  className="w-full bg-black border border-red-500/40 rounded p-3 text-white focus:border-red-300 focus:outline-none"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  const ok = await onDeleteAccount({
+                    email: deleteEmail.trim().toLowerCase(),
+                    password: deletePassword,
+                    confirmText: deleteConfirmText.trim().toUpperCase()
+                  });
+                  if (ok) {
+                    setShowDangerZone(false);
+                  }
+                }}
+                className="w-full bg-red-600 text-white font-bold py-3 rounded hover:bg-red-500 transition-colors"
+              >
+                Confirmer la suppression définitive
+              </button>
             </div>
           )}
         </div>
@@ -4730,6 +5713,9 @@ export default function App() {
   const [showPayModal, setShowPayModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupModal, setShowSignupModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [prefillResetEmail, setPrefillResetEmail] = useState('');
+  const [prefillResetToken, setPrefillResetToken] = useState('');
   const [prefillSignupEmail, setPrefillSignupEmail] = useState<string>(() => localStorage.getItem(LEAD_STORAGE_KEY) || '');
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -5038,6 +6024,7 @@ export default function App() {
       const authStatus = searchParams.get('auth_status');
       const authError = searchParams.get('auth_error');
       const checkoutStatus = searchParams.get('checkout');
+      const resetToken = searchParams.get('reset_token');
 
       if (authStatus === 'success' || authStatus === 'email_verified') {
         setShowLoginModal(false);
@@ -5063,7 +6050,14 @@ export default function App() {
         alert('Paiement annulé.');
       }
 
-      if (!authStatus && !checkoutStatus) return;
+      if (resetToken) {
+        setPrefillResetToken(resetToken.trim());
+        setShowLoginModal(false);
+        setShowSignupModal(false);
+        setShowResetPasswordModal(true);
+      }
+
+      if (!authStatus && !checkoutStatus && !resetToken) return;
 
       const nextUrl = new URL(window.location.href);
       [
@@ -5071,7 +6065,8 @@ export default function App() {
         'auth_error',
         'auth_mode',
         'auth_provider',
-        'checkout'
+        'checkout',
+        'reset_token'
       ].forEach((key) => nextUrl.searchParams.delete(key));
       window.history.replaceState({}, document.title, `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     }, [searchParams]);
@@ -5140,6 +6135,53 @@ export default function App() {
     }
   };
 
+  const handleRequestPasswordReset = async (emailInput: string) => {
+    const email = emailInput.trim().toLowerCase();
+    try {
+      const res = await apiFetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || 'auth_failed');
+      }
+      alert("Si cet email existe, un lien de réinitialisation vient d'être envoyé.");
+      return true;
+    } catch (error) {
+      alert(getFriendlyAuthError(error instanceof Error ? error.message : 'auth_failed'));
+      return false;
+    }
+  };
+
+  const handleResetPassword = async (tokenInput: string, newPassword: string) => {
+    const token = tokenInput.trim();
+    try {
+      const res = await apiFetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.user) {
+        throw new Error(data?.error || 'auth_failed');
+      }
+      applySessionState(data.user);
+      const sessionOk = await loadServerSession();
+      if (!sessionOk) {
+        throw new Error('session_cookie_blocked');
+      }
+      await loadPublicContent();
+      setPrefillResetToken('');
+      alert('Mot de passe mis à jour. Vous êtes connecté.');
+      return true;
+    } catch (error) {
+      alert(getFriendlyAuthError(error instanceof Error ? error.message : 'auth_failed'));
+      return false;
+    }
+  };
+
   const handleNewPost = async (post: Post) => {
     if (!currentUser || !isAdmin) {
       alert("Connectez-vous en admin pour publier.");
@@ -5205,7 +6247,7 @@ export default function App() {
     }
   };
 
-  const handleUpdateTrades = async (payload: { trades: Trade[]; marketAnalysis: string }) => {
+  const handleUpdateTrades = async (payload: { trades: Trade[]; marketAnalysis: string; snapshotDate?: string }) => {
     if (!currentUser || !isAdmin) {
       alert("Connectez-vous en admin pour modifier les signaux.");
       return false;
@@ -5347,6 +6389,31 @@ export default function App() {
     }
   };
 
+  const handleDeleteAccount = async (payload: { email: string; password: string; confirmText: string }) => {
+    try {
+      const res = await apiFetch('/api/auth/delete-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'account_delete_failed');
+    } catch (error) {
+      alert(getFriendlyAuthError(error instanceof Error ? error.message : 'account_delete_failed'));
+      return false;
+    }
+
+    applySessionState(null);
+    setShowTrainingCenter(false);
+    setShowAccountModal(false);
+    setShowAdmin(false);
+    localStorage.removeItem(LEAD_STORAGE_KEY);
+    setPrefillSignupEmail('');
+    await loadPublicContent();
+    alert("Compte supprimé avec succès.");
+    return true;
+  };
+
   const handleLogout = async () => {
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' });
@@ -5438,10 +6505,28 @@ export default function App() {
           onResendVerification={(email) => {
             void handleResendVerificationEmail(email);
           }}
+          onOpenPasswordReset={(email) => {
+            setPrefillResetEmail((email || '').trim().toLowerCase());
+            setPrefillResetToken('');
+            setShowLoginModal(false);
+            setShowResetPasswordModal(true);
+          }}
           onOpenSignup={() => setShowSignupModal(true)}
           socialProviders={socialProviders}
           oauthCallbackBaseUrl={oauthCallbackBaseUrl}
           onSocialAuth={handleStartSocialAuth}
+        />
+
+        <ResetPasswordModal
+          isOpen={showResetPasswordModal}
+          onClose={() => {
+            setShowResetPasswordModal(false);
+            setPrefillResetToken('');
+          }}
+          initialEmail={prefillResetEmail}
+          initialToken={prefillResetToken}
+          onRequestReset={handleRequestPasswordReset}
+          onResetPassword={handleResetPassword}
         />
 
         <SignupModal 
@@ -5451,7 +6536,10 @@ export default function App() {
           }}
           onConfirm={async (email, password) => {
             const ok = await authenticateWithServer('/api/auth/signup', email, password, {
-              referralCode: referralCode || undefined
+              referralCode: referralCode || undefined,
+              hutk: getCookieValue('hubspotutk') || undefined,
+              pageUri: typeof window !== 'undefined' ? window.location.href : undefined,
+              pageName: 'Signup'
             });
             if (ok) {
               setShowSignupModal(false);
@@ -5495,6 +6583,7 @@ export default function App() {
           isOpen={showAccountModal}
           onClose={() => setShowAccountModal(false)}
           onLogout={handleLogout}
+          onDeleteAccount={handleDeleteAccount}
           onResendVerification={() => {
             void handleResendVerificationEmail();
           }}

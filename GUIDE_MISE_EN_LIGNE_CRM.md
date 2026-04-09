@@ -30,6 +30,11 @@ Ajoutez dans le service API:
 - `LEMON_VARIANT_ID_CRYPTO`
 - `LEMON_VARIANT_ID_COMBO`
 - `LEMON_SQUEEZY_WEBHOOK_SECRET`
+- `LEMON_AFFILIATE_EXTERNAL_ENABLED` (`true` si vous utilisez l'affiliation native Lemon)
+- `PLAN_PRICE_BOURSE_EUR=29`
+- `PLAN_PRICE_CRYPTO_EUR=29`
+- `PLAN_PRICE_COMBO_EUR=49`
+- `AFFILIATE_CRYPTO_COMMISSION_RATE=0.5`
 
 Optionnel:
 - `LEMON_SQUEEZY_CHECKOUT_SUCCESS_URL`
@@ -87,3 +92,54 @@ npm run admin:reset -- --email=admin@votredomaine.com --password='MotDePasseTres
 - Le frontend ne peut pas activer un abonnement seul.
 - Gardez `VITE_ENABLE_ADMIN_CONSOLE=false` en production publique.
 - Sauvegardez et protégez les variables d’environnement sur Render.
+
+## 9) Connexion HubSpot (Form API, compatible SPA React/Vite)
+
+### Ce qui est déjà prêt dans le code
+
+- Le signup frontend envoie déjà le contexte utile (`hutk`, `pageUri`, `pageName`) vers l’API.
+- La route backend `POST /api/auth/signup` envoie déjà la soumission vers HubSpot après création utilisateur et résolution du parrainage.
+- Les champs HubSpot sont envoyés côté serveur (pas de clé HubSpot côté frontend).
+
+### Ce que vous devez créer dans HubSpot
+
+1. Créez un formulaire HubSpot (exemple : `Website Signup`).
+2. Créez ces propriétés contact si elles n’existent pas :
+   - `signup_date` (date)
+   - `referral_code` (texte)
+   - `referred_by_email` (texte/email)
+   - `referral_owner_email` (texte/email)
+   - `contact_role` (liste, valeur possible : `filleul`)
+3. Récupérez :
+   - `Portal ID`
+   - `Form GUID`
+
+### Variables Render à renseigner (service `black-papers-api`)
+
+- `HUBSPOT_PORTAL_ID` (`148215821`)
+- `HUBSPOT_SIGNUP_FORM_GUID` (`37e16bb6-49bd-42bc-b091-49e06cf53f82`)
+- `HUBSPOT_PRIVATE_APP_TOKEN` (recommandé pour endpoint secure)
+- `HUBSPOT_ACCESS_TOKEN` (alias legacy, optionnel)
+- `HUBSPOT_SYNC_TIMEOUT_MS` (optionnel, défaut `8000`)
+
+### Flux réel côté backend
+
+1. validation signup
+2. création du compte
+3. résolution du parrainage
+4. mise à jour CRM interne
+5. envoi HubSpot Form API
+6. création session
+7. envoi email de vérification
+
+### Test rapide après déploiement
+
+1. Faites une inscription test.
+2. Vérifiez le contact dans HubSpot.
+3. Vérifiez que les propriétés de parrainage sont remplies si un code parrain est utilisé.
+4. En cas d’erreur, vérifiez les logs API Render (message `[CRM] HubSpot signup sync failed...`).
+
+### Important (ce qu'il vous manque encore)
+
+- Renseigner `HUBSPOT_PRIVATE_APP_TOKEN` (Private App HubSpot avec scope `forms`).
+- Vérifier dans HubSpot que les propriétés `signup_date`, `referral_code`, `referred_by_email`, `referral_owner_email`, `contact_role` existent.
