@@ -1,0 +1,749 @@
+{
+  "users": [
+    {
+      "id": "29145de4-6c5a-45aa-9fcd-7b50d5d40c30",
+      "email": "test1admin@blackpapers.com",
+      "passwordHash": "625a236fd13933ec9fcc95ab8a34f0b1:ccbeacbd9b9703e3e2078c1bbb20720e84a71e28642ce78671e347e53e47f2de1f8ae83ca58b859b51af872ba958cacc7d920d3272b353ad8d1b51d472179d8a",
+      "isSubscribed": true,
+      "isAdmin": true,
+      "manualVipAccess": true,
+      "needsOnboarding": false,
+      "subscriptionPlan": "ADMIN",
+      "subscriptionStatus": "ADMIN",
+      "subscriptionUpdatedAt": "2026-04-08T23:01:37.295Z",
+      "emailVerified": true,
+      "emailVerifiedAt": "2026-04-08T23:01:37.295Z",
+      "emailVerificationTokenHash": null,
+      "emailVerificationExpiresAt": null,
+      "authProviders": {},
+      "affiliateProfile": {
+        "isAffiliate": true,
+        "referralCode": "ADMIN",
+        "referrals": [],
+        "commissionHistory": []
+      },
+      "billing": {
+        "provider": "NONE",
+        "lemonCustomerId": null,
+        "lemonSubscriptionId": null,
+        "lemonOrderId": null,
+        "lemonVariantId": null,
+        "lemonProductId": null,
+        "lemonProductName": null,
+        "checkoutUrl": null,
+        "checkoutStartedAt": null,
+        "currentPeriodStart": null,
+        "currentPeriodEnd": null,
+        "canceledAt": null,
+        "lastWebhookEvent": null,
+        "lastWebhookAt": null
+      },
+      "createdAt": "2026-04-08T23:01:37.295Z",
+      "subscriptionStartedAt": "2026-04-08T23:01:37.295Z",
+      "onboardingCompletedAt": "2026-04-08T23:01:37.295Z"
+    },
+    {
+      "id": "2c4349a4-3ba8-4350-b8c5-c128a50dd47f",
+      "email": "lukas@blackpapers.net",
+      "createdAt": "2026-03-28T15:39:23.539Z",
+      "passwordHash": "8bacd1d8adcb5d66da9b63278dc04a80:926665a01c4fcdd00daa3fe99184f221e12c333efa82f9e004f4efcd2d6b51bfd3e244d97643a848aaf47d5a1d051d2bc84f9a42daa724d76fa52c16d66559e0",
+      "isAdmin": true,
+      "isSubscribed": true,
+      "manualVipAccess": true,
+      "needsOnboarding": false,
+      "subscriptionPlan": "ADMIN",
+      "subscriptionStatus": "ADMIN",
+      "subscriptionUpdatedAt": "2026-03-28T15:40:49.396Z",
+      "emailVerified": true,
+      "emailVerifiedAt": "2026-03-28T15:39:23.539Z",
+      "emailVerificationTokenHash": null,
+      "emailVerificationExpiresAt": null,
+      "authProviders": {},
+      "billing": {
+        "provider": "NONE",
+        "lemonCustomerId": null,
+        "lemonSubscriptionId": null,
+        "lemonOrderId": null,
+        "lemonVariantId": null,
+        "lemonProductId": null,
+        "lemonProductName": null,
+        "checkoutUrl": null,
+        "checkoutStartedAt": null,
+        "currentPeriodStart": null,
+        "currentPeriodEnd": null,
+        "canceledAt": null,
+        "lastWebhookEvent": null,
+        "lastWebhookAt": null
+      },
+      "onboardingCompletedAt": "2026-03-28T15:39:23.539Z",
+      "affiliateProfile": {
+        "isAffiliate": true,
+        "referralCode": "BLACKADMIN",
+        "referrals": [
+          {
+            "id": "ref-1",
+            "pseudo": "trader.alpha@test.com",
+            "email": "trader.alpha@test.com",
+            "subscriptionPlan": "combo",
+            "subscriptionActive": true,
+            "commissionAmount": 15,
+            "commissionStatus": "READY_TO_PAY",
+            "joinedAt": "2026-03-01T10:00:00.000Z"
+          },
+          {
+            "id": "ref-2",
+            "pseudo": "sarah.vip@test.com",
+            "email": "sarah.vip@test.com",
+            "subscriptionPlan": "crypto",
+            "subscriptionActive": true,
+            "commissionAmount": 15,
+            "commissionStatus": "PAID",
+            "joinedAt": "2026-02-20T10:00:00.000Z"
+          },
+          {
+            "id": "ref-3",
+            "pseudo": "paul.lead@test.com",
+            "email": "paul.lead@test.com",
+            "subscriptionPlan": "bourse",
+            "subscriptionActive": false,
+            "commissionAmount": 0,
+            "commissionStatus": "LOCKED",
+            "joinedAt": "2026-03-10T10:00:00.000Z"
+          }
+        ],
+        "commissionHistory": [
+          {
+            "id": "comm-1",
+            "amount": 15,
+            "sourceUser": "sarah.vip@test.com",
+            "dateCreated": "2026-02-21",
+            "status": "PAID",
+            "payoutMethod": "FIAT"
+          },
+          {
+            "id": "comm-2",
+            "amount": 15,
+            "sourceUser": "trader.alpha@test.com",
+            "dateCreated": "2026-03-01",
+            "status": "READY_TO_PAY",
+            "payoutMethod": "FIAT"
+          }
+        ]
+      },
+      "subscriptionStartedAt": "2026-03-28T15:39:23.539Z"
+    },
+    {
+      "id": "ccaa25f0-ff3f-4744-b97c-bc80a398ce77",
+      "email": "admin@local.dev",
+      "passwordHash": "09798297e9384041ec378547943054fd:c7eacb67b91df57f25082be66aafe47621823d7377d7423a3f72b4f532fc0cb91fbf9c4826e33a4e53a88c6d0227093e41089ea06ff8aed867feda231e7e177a",
+      "isSubscribed": true,
+      "isAdmin": true,
+      "needsOnboarding": false,
+      "subscriptionPlan": "ADMIN",
+      "affiliateProfile": {
+        "isAffiliate": true,
+        "referralCode": "ADMIN-816ABC",
+        "referrals": [
+          {
+            "id": "ref-1",
+            "pseudo": "trader.alpha@test.com",
+            "email": "trader.alpha@test.com",
+            "subscriptionPlan": "combo",
+            "subscriptionActive": true,
+            "commissionAmount": 15,
+            "commissionStatus": "READY_TO_PAY",
+            "joinedAt": "2026-03-01T10:00:00.000Z"
+          },
+          {
+            "id": "ref-2",
+            "pseudo": "sarah.vip@test.com",
+            "email": "sarah.vip@test.com",
+            "subscriptionPlan": "crypto",
+            "subscriptionActive": true,
+            "commissionAmount": 15,
+            "commissionStatus": "PAID",
+            "joinedAt": "2026-02-20T10:00:00.000Z"
+          },
+          {
+            "id": "ref-3",
+            "pseudo": "paul.lead@test.com",
+            "email": "paul.lead@test.com",
+            "subscriptionPlan": "bourse",
+            "subscriptionActive": false,
+            "commissionAmount": 0,
+            "commissionStatus": "LOCKED",
+            "joinedAt": "2026-03-10T10:00:00.000Z"
+          }
+        ],
+        "commissionHistory": [
+          {
+            "id": "comm-1",
+            "amount": 15,
+            "sourceUser": "sarah.vip@test.com",
+            "dateCreated": "2026-02-21",
+            "status": "PAID",
+            "payoutMethod": "FIAT"
+          },
+          {
+            "id": "comm-2",
+            "amount": 15,
+            "sourceUser": "trader.alpha@test.com",
+            "dateCreated": "2026-03-01",
+            "status": "READY_TO_PAY",
+            "payoutMethod": "FIAT"
+          }
+        ]
+      },
+      "createdAt": "2026-03-19T16:50:15.496Z",
+      "subscriptionStatus": "ADMIN",
+      "manualVipAccess": true,
+      "emailVerified": true,
+      "authProviders": {},
+      "emailVerificationTokenHash": null,
+      "emailVerificationExpiresAt": null,
+      "emailVerifiedAt": "2026-04-08T22:58:52.472Z",
+      "billing": {
+        "provider": "NONE",
+        "lemonCustomerId": null,
+        "lemonSubscriptionId": null,
+        "lemonOrderId": null,
+        "lemonVariantId": null,
+        "lemonProductId": null,
+        "lemonProductName": null,
+        "checkoutUrl": null,
+        "checkoutStartedAt": null,
+        "currentPeriodStart": null,
+        "currentPeriodEnd": null,
+        "canceledAt": null,
+        "lastWebhookEvent": null,
+        "lastWebhookAt": null
+      },
+      "subscriptionUpdatedAt": "2026-04-08T22:58:52.472Z",
+      "onboardingCompletedAt": "2026-03-19T16:50:15.496Z",
+      "subscriptionStartedAt": "2026-03-19T16:50:15.496Z"
+    },
+    {
+      "id": "55eef0e0-048d-4555-9650-d2c1be742394",
+      "email": "bourse.validation@test.com",
+      "passwordHash": "4b0948c0ffcd983d1051fd176f48cb45:a4286c5ba77e1353b6bd7757c9065d5f78c5ab718b520dc79de3b24eae4a261c232e70a2f45002fa6574dd84159cec2ff339a24e58e2eaefb9dab11912657e29",
+      "isSubscribed": true,
+      "isAdmin": false,
+      "manualVipAccess": false,
+      "needsOnboarding": false,
+      "subscriptionPlan": "bourse",
+      "subscriptionStatus": "CANCELED",
+      "emailVerified": true,
+      "emailVerifiedAt": "2026-03-27T01:14:42.925Z",
+      "emailVerificationTokenHash": null,
+      "emailVerificationExpiresAt": null,
+      "authProviders": {},
+      "affiliateProfile": {
+        "isAffiliate": false,
+        "referralCode": "BOURSE.VAL",
+        "referrals": [],
+        "commissionHistory": []
+      },
+      "createdAt": "2026-03-27T01:14:42.925Z",
+      "billing": {
+        "provider": "NONE",
+        "lemonCustomerId": null,
+        "lemonSubscriptionId": null,
+        "lemonOrderId": null,
+        "lemonVariantId": null,
+        "lemonProductId": null,
+        "lemonProductName": null,
+        "checkoutUrl": null,
+        "checkoutStartedAt": null,
+        "currentPeriodStart": "2026-03-01T00:00:00.000Z",
+        "currentPeriodEnd": "2026-04-10T00:00:00.000Z",
+        "canceledAt": "2026-03-28T23:47:20.791Z",
+        "lastWebhookEvent": null,
+        "lastWebhookAt": null
+      },
+      "subscriptionUpdatedAt": "2026-03-28T23:47:20.791Z",
+      "onboardingCompletedAt": "2026-03-27T01:14:42.925Z",
+      "subscriptionStartedAt": "2026-03-27T01:14:42.925Z"
+    },
+    {
+      "id": "9f5eb812-59f9-49ad-abe6-84f1f874a0c1",
+      "email": "crypto.validation@test.com",
+      "passwordHash": "3b4797dc45de3c2f522c37f2c573beea:03f482f910cbf7ea8716126828077640e11b744cd08a3a1445a2d2686a57bfe0ddda92cd726a835430f38e006af269ca4e183403cde8796ee484f9dd0918576f",
+      "isSubscribed": true,
+      "isAdmin": false,
+      "manualVipAccess": false,
+      "needsOnboarding": false,
+      "subscriptionPlan": "crypto",
+      "subscriptionStatus": "ACTIVE",
+      "emailVerified": true,
+      "emailVerifiedAt": "2026-03-27T01:15:04.179Z",
+      "emailVerificationTokenHash": null,
+      "emailVerificationExpiresAt": null,
+      "authProviders": {},
+      "affiliateProfile": {
+        "isAffiliate": false,
+        "referralCode": "CRYPTO.VAL",
+        "referrals": [],
+        "commissionHistory": []
+      },
+      "createdAt": "2026-03-27T01:15:04.179Z",
+      "billing": {
+        "provider": "NONE",
+        "lemonCustomerId": null,
+        "lemonSubscriptionId": null,
+        "lemonOrderId": null,
+        "lemonVariantId": null,
+        "lemonProductId": null,
+        "lemonProductName": null,
+        "checkoutUrl": null,
+        "checkoutStartedAt": null,
+        "currentPeriodStart": null,
+        "currentPeriodEnd": null,
+        "canceledAt": null,
+        "lastWebhookEvent": null,
+        "lastWebhookAt": null
+      },
+      "subscriptionUpdatedAt": "2026-03-27T01:15:04.179Z",
+      "onboardingCompletedAt": "2026-03-27T01:15:04.179Z",
+      "subscriptionStartedAt": "2026-03-27T01:15:04.179Z"
+    },
+    {
+      "id": "7be2c3d0-4bac-4c4b-88b7-53b20e3ca028",
+      "email": "free.validation@test.com",
+      "passwordHash": "ac589a313b75e30e1308ffa4dd99b4a3:2d8d339159d4775bb550f0e36108df00492b6aa69b334ba41a56b39f79d9da946687fde4781ac14e23104461030a6e45d046379002817d99f8f13d9f052311a8",
+      "isSubscribed": false,
+      "isAdmin": false,
+      "manualVipAccess": false,
+      "needsOnboarding": true,
+      "subscriptionPlan": "NONE",
+      "subscriptionStatus": "NONE",
+      "emailVerified": false,
+      "emailVerifiedAt": null,
+      "emailVerificationTokenHash": "0aa7deefc37db8ee4983e75968e94078c0f348a7c6507e9b8a92addb72f224cc",
+      "emailVerificationExpiresAt": "2026-03-28T01:15:46.316Z",
+      "authProviders": {},
+      "affiliateProfile": {
+        "isAffiliate": false,
+        "referralCode": "FREE.VALID",
+        "referrals": [],
+        "commissionHistory": []
+      },
+      "createdAt": "2026-03-27T01:15:20.452Z",
+      "billing": {
+        "provider": "NONE",
+        "lemonCustomerId": null,
+        "lemonSubscriptionId": null,
+        "lemonOrderId": null,
+        "lemonVariantId": null,
+        "lemonProductId": null,
+        "lemonProductName": null,
+        "checkoutUrl": null,
+        "checkoutStartedAt": null,
+        "currentPeriodStart": null,
+        "currentPeriodEnd": null,
+        "canceledAt": null,
+        "lastWebhookEvent": null,
+        "lastWebhookAt": null
+      },
+      "subscriptionUpdatedAt": "2026-03-27T01:15:20.452Z",
+      "onboardingCompletedAt": null,
+      "subscriptionStartedAt": null
+    },
+    {
+      "id": "9187e455-efcf-488c-9903-9f2b4b09c42e",
+      "email": "qa.free.review.20260328@local.dev",
+      "passwordHash": "8c97df7f6bd1c3f8e7a72e8cfdda95df:154d37df53a3224e1c04484c450c3af25523719d963059ad0d51598067c80707aaa4a5207af95f0ccd6931455dcc0844eee806724c90150846a76151ad1b704b",
+      "isSubscribed": false,
+      "isAdmin": false,
+      "manualVipAccess": false,
+      "needsOnboarding": true,
+      "subscriptionPlan": "NONE",
+      "subscriptionStatus": "NONE",
+      "subscriptionUpdatedAt": "2026-03-28T15:40:56.881Z",
+      "emailVerified": false,
+      "emailVerifiedAt": null,
+      "emailVerificationTokenHash": "8f4ecba9da2580b5f4f8814bd942b4524186c32b274d4f63a308b1d43f78e68c",
+      "emailVerificationExpiresAt": "2026-03-29T15:40:56.908Z",
+      "authProviders": {},
+      "affiliateProfile": {
+        "isAffiliate": false,
+        "referralCode": "QA.FREE.RE",
+        "referrals": [],
+        "commissionHistory": []
+      },
+      "billing": {
+        "provider": "NONE",
+        "lemonCustomerId": null,
+        "lemonSubscriptionId": null,
+        "lemonOrderId": null,
+        "lemonVariantId": null,
+        "lemonProductId": null,
+        "lemonProductName": null,
+        "checkoutUrl": null,
+        "checkoutStartedAt": null,
+        "currentPeriodStart": null,
+        "currentPeriodEnd": null,
+        "canceledAt": null,
+        "lastWebhookEvent": null,
+        "lastWebhookAt": null
+      },
+      "onboardingCompletedAt": null,
+      "createdAt": "2026-03-28T15:40:56.881Z",
+      "subscriptionStartedAt": null
+    }
+  ],
+  "sessions": {
+    "5d79e9665eba2c9d9147bedd59a2af563425a4a5e8d3ad942c855d05f8fd6a5f": {
+      "id": "759cebf7-9133-495f-8bfd-11fa4898d866",
+      "userId": "29145de4-6c5a-45aa-9fcd-7b50d5d40c30",
+      "tokenHash": "5d79e9665eba2c9d9147bedd59a2af563425a4a5e8d3ad942c855d05f8fd6a5f",
+      "createdAt": "2026-04-09T00:43:47.224Z",
+      "updatedAt": "2026-04-09T13:19:26.708Z",
+      "lastRotatedAt": "2026-04-09T13:19:26.708Z",
+      "expiresAt": "2026-04-10T01:19:26.708Z",
+      "absoluteExpiresAt": "2026-04-23T00:43:47.224Z",
+      "revokedAt": null,
+      "revokedReason": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+    },
+    "12fcdfcf5f7cf4e83d825e8a03bad62650c63f8c350b5b91bf826dc270490f2c": {
+      "id": "3f6250e8-150e-4cc2-944c-77e87ef5029c",
+      "userId": "29145de4-6c5a-45aa-9fcd-7b50d5d40c30",
+      "tokenHash": "12fcdfcf5f7cf4e83d825e8a03bad62650c63f8c350b5b91bf826dc270490f2c",
+      "createdAt": "2026-04-09T13:55:45.630Z",
+      "updatedAt": "2026-04-09T19:22:37.276Z",
+      "lastRotatedAt": "2026-04-09T19:22:37.276Z",
+      "expiresAt": "2026-04-10T07:22:37.276Z",
+      "absoluteExpiresAt": "2026-04-23T13:55:45.630Z",
+      "revokedAt": null,
+      "revokedReason": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+    }
+  },
+  "posts": [
+    {
+      "id": "post-auto-rss-3faf5c00-d2b6-42da-b4bc-7b7b39fca946",
+      "title": "VictoryShares Emerging Markets Value Momentum ETF (UEVM) Actions en circulation - Investing.com France",
+      "excerpt": "VictoryShares Emerging Markets Value Momentum ETF (UEVM) Actions en circulation &nbsp;&nbsp; Investing.com France",
+      "content": "VictoryShares Emerging Markets Value Momentum ETF (UEVM) Actions en circulation &nbsp;&nbsp; Investing.com France\n\nSource: Investing.com - https://news.google.com/rss/articles/CBMiakFVX3lxTE5uSXZIT0RtRTNnOEFwNHVnSlhQN2xqMVV3UjhnWFR0LVJJTmRIZUItaXNNaHc3QTY1UkFkdDNHSzgzVU5zRHdpLUp5Nnk4RThYR1d3WE92TGxUdzctcDVxcVBtaXM5TWtZR0E?oc=5",
+      "type": "ARTICLE",
+      "tags": [
+        "AUTO_RSS",
+        "INVESTING.COM"
+      ],
+      "isLocked": false,
+      "publicationStatus": "DRAFT",
+      "autoSourceUrl": "https://news.google.com/rss/articles/CBMiakFVX3lxTE5uSXZIT0RtRTNnOEFwNHVnSlhQN2xqMVV3UjhnWFR0LVJJTmRIZUItaXNNaHc3QTY1UkFkdDNHSzgzVU5zRHdpLUp5Nnk4RThYR1d3WE92TGxUdzctcDVxcVBtaXM5TWtZR0E?oc=5",
+      "autoSourceName": "Investing.com",
+      "autoPublishedAt": "2026-03-28T13:20:49.000Z",
+      "date": "28/03/2026",
+      "createdAt": "2026-03-28T15:40:43.777Z",
+      "updatedAt": "2026-03-28T15:40:43.777Z"
+    },
+    {
+      "id": "trade-123",
+      "type": "TRADE_SIGNAL",
+      "title": "Dossier #402 : Short Squeeze sur ETH ?",
+      "excerpt": "Analyse complete du setup Ethereum avant les annonces CPI.",
+      "content": "",
+      "date": "Aujourd'hui, 09:30",
+      "isLocked": true,
+      "tags": [
+        "ETH",
+        "Scalping",
+        "High Risk"
+      ],
+      "tradeDetails": {
+        "asset": "ETH/USDT",
+        "direction": "LONG",
+        "macroContext": "L'inflation US (CPI) est attendue plus basse que prevu.",
+        "riskRewardRatio": 3.2,
+        "conviction": "HIGH",
+        "scenarios": [
+          {
+            "label": "A",
+            "description": "Cassure des 2100$ + retest -> visee 2250$",
+            "probability": 65
+          },
+          {
+            "label": "B",
+            "description": "Rejet sous 2100$ et retour range 2050$",
+            "probability": 25
+          },
+          {
+            "label": "C",
+            "description": "Invalidation sous 2020$",
+            "probability": 10
+          }
+        ],
+        "levels": {
+          "entry": 2105,
+          "stopLoss": 2020,
+          "exit": 2280
+        },
+        "isCompleted": true,
+        "executionTime": "14:45",
+        "entryReason": "Cloture H4 au-dessus du VWAP journalier + divergence RSI validee.",
+        "exitReason": "TP1 touche. J'ai cloture 70% de la position avant la resistance psychologique.",
+        "mistake": "Entree un peu tardive.",
+        "lesson": "Ne pas hesiter quand le setup A+ est valide.",
+        "pnlPercentage": 8.5,
+        "emotionalState": "CALM",
+        "scores": {
+          "execution": 9,
+          "result": 8
+        }
+      }
+    },
+    {
+      "id": "p1",
+      "type": "ARTICLE",
+      "title": "Pourquoi j'ai shorte le S&P500 cette semaine",
+      "excerpt": "L'analyse macro-economique montre des signes de faiblesse clairs.",
+      "content": "Analyse detaillee du contexte macro et des niveaux clefs.",
+      "date": "Hier",
+      "isLocked": false,
+      "tags": [
+        "Macro",
+        "SP500",
+        "Opinion"
+      ]
+    }
+  ],
+  "reviews": [
+    {
+      "id": "review-9ef7ae9f-0f14-4447-981b-9ac9d0551b85",
+      "author": "__qa_admin_review__",
+      "role": "VIP",
+      "rating": 5,
+      "date": "A l'instant",
+      "content": "validation moderation admin",
+      "analysis": "pipeline moderation test",
+      "type": "TEXT",
+      "status": "APPROVED",
+      "createdAt": "2026-03-28T15:40:34.062Z",
+      "updatedAt": "2026-03-28T15:40:39.148Z"
+    },
+    {
+      "id": "r1",
+      "author": "CryptoMatrix",
+      "role": "INFLUENCER",
+      "rating": 5,
+      "date": "Il y a 2 jours",
+      "content": "J'ai audite les Black Papers. Transparence et discipline.",
+      "type": "VIDEO",
+      "videoUrl": "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80",
+      "status": "APPROVED",
+      "platform": "YouTube",
+      "createdAt": "2026-03-26T23:43:56.085Z",
+      "updatedAt": "2026-03-26T23:43:56.085Z"
+    },
+    {
+      "id": "r2",
+      "author": "Thomas R.",
+      "role": "VIP",
+      "rating": 5,
+      "date": "Hier",
+      "content": "Rembourse en un seul trade sur SOL. La partie risk management m'a aide.",
+      "type": "TEXT",
+      "status": "APPROVED",
+      "pnlProof": true,
+      "createdAt": "2026-03-27T23:43:56.085Z",
+      "updatedAt": "2026-03-27T23:43:56.085Z"
+    },
+    {
+      "id": "r3",
+      "author": "Anon_User_22",
+      "role": "USER",
+      "rating": 3,
+      "date": "Aujourd'hui",
+      "content": "Contenu top mais j'aimerais plus de lives video.",
+      "type": "TEXT",
+      "status": "PENDING",
+      "createdAt": "2026-03-28T23:43:56.085Z",
+      "updatedAt": "2026-03-28T23:43:56.085Z"
+    }
+  ],
+  "dailyTrades": [
+    {
+      "actif": "EUR/USD",
+      "market": "BOURSE",
+      "direction": "Long",
+      "entree": 1.085,
+      "sl": 1.082,
+      "tp": 1.092,
+      "taille": "1%",
+      "raison": "RSI >50 + support 1.0840",
+      "heure": "2026-03-19 08:00"
+    },
+    {
+      "actif": "BTC/USDT",
+      "market": "CRYPTO",
+      "direction": "Short",
+      "entree": 68420,
+      "sl": 69100,
+      "tp": 66800,
+      "taille": "0.75%",
+      "raison": "Rejet resistance H1 + divergence baissiere",
+      "heure": "2026-03-19 09:20"
+    },
+    {
+      "actif": "XAU/USD",
+      "market": "BOURSE",
+      "direction": "Long",
+      "entree": 3025.5,
+      "sl": 3013.2,
+      "tp": 3044.8,
+      "taille": "1.25%",
+      "raison": "Breakout Londres + momentum sur l or",
+      "heure": "2026-03-19 10:05"
+    },
+    {
+      "actif": "NAS100",
+      "market": "BOURSE",
+      "direction": "Long",
+      "entree": 20145,
+      "sl": 20040,
+      "tp": 20380,
+      "taille": "0.5%",
+      "raison": "Reclaim VWAP + flux risk-on pre-open US",
+      "heure": "2026-03-19 14:35"
+    }
+  ],
+  "marketAnalysis": "## Biais du jour\n\n- Le dollar ralentit legerement, ce qui soutient les actifs a risque.\n- Le flux reste propre seulement sur retest et non sur poursuite impulsive.\n- Les publications macro US de fin de session peuvent elargir fortement la volatilite.\n\n## Zones a surveiller\n\n- EUR/USD: 1.0840 comme zone pivot.\n- BTC: 69k comme zone de liquidite vendeuse.\n- Gold: momentum haussier conserve au-dessus de 3013.\n\n## Discipline execution\n\n- Ne pas chasser un move deja parti.\n- Baisser la taille si le spread s elargit.\n- Stop loss obligatoire sur chaque signal.\n",
+  "leads": [
+    {
+      "id": "lead-72424ecb-cab9-4943-949b-37ab1c0246a0",
+      "email": "test1admin@blackpapers.com",
+      "source": "login",
+      "status": "VIP_ACTIVE",
+      "userId": "29145de4-6c5a-45aa-9fcd-7b50d5d40c30",
+      "referralCode": null,
+      "referralOwnerEmail": null,
+      "subscriptionPlan": "ADMIN",
+      "subscriptionStatus": "ADMIN",
+      "lastEvent": "vip_activated",
+      "createdAt": "2026-04-08T23:02:15.225Z",
+      "updatedAt": "2026-04-09T22:20:19.094Z"
+    },
+    {
+      "id": "lead-34cf71df-de6c-4071-b48e-9ea96715fe75",
+      "email": "lead.aff.test.20260329@local.dev",
+      "source": "affiliate_BLACKADMIN",
+      "status": "LEAD",
+      "userId": null,
+      "referralCode": "BLACKADMIN",
+      "referralOwnerEmail": "lukas@blackpapers.net",
+      "subscriptionPlan": "NONE",
+      "subscriptionStatus": "NONE",
+      "lastEvent": "captured",
+      "createdAt": "2026-03-28T23:47:27.228Z",
+      "updatedAt": "2026-03-28T23:47:27.228Z"
+    },
+    {
+      "id": "lead-97aad53c-6f86-49e4-aafa-b5c3e2a6891b",
+      "email": "bourse.validation@test.com",
+      "source": "admin_user_update",
+      "status": "VIP_ACTIVE",
+      "userId": "55eef0e0-048d-4555-9650-d2c1be742394",
+      "referralCode": null,
+      "referralOwnerEmail": null,
+      "subscriptionPlan": "bourse",
+      "subscriptionStatus": "CANCELED",
+      "lastEvent": "account_linked",
+      "createdAt": "2026-03-28T23:47:20.791Z",
+      "updatedAt": "2026-03-28T23:47:20.791Z"
+    },
+    {
+      "id": "lead-4096d899-f23a-45c7-9ab7-fba82bfb9e2c",
+      "email": "qa.starter.capture@local.dev",
+      "source": "home_starter_capture",
+      "status": "LEAD",
+      "userId": null,
+      "referralCode": null,
+      "referralOwnerEmail": null,
+      "subscriptionPlan": "NONE",
+      "subscriptionStatus": "NONE",
+      "lastEvent": "captured",
+      "createdAt": "2026-03-28T15:41:09.306Z",
+      "updatedAt": "2026-03-28T15:41:09.306Z"
+    },
+    {
+      "id": "lead-e3c089d2-be4c-4d5c-8c27-7eabfb1c3d72",
+      "email": "qa.free.review.20260328@local.dev",
+      "source": "signup",
+      "status": "REGISTERED",
+      "userId": "9187e455-efcf-488c-9903-9f2b4b09c42e",
+      "referralCode": null,
+      "referralOwnerEmail": null,
+      "subscriptionPlan": "NONE",
+      "subscriptionStatus": "NONE",
+      "lastEvent": "account_linked",
+      "createdAt": "2026-03-28T15:40:56.908Z",
+      "updatedAt": "2026-03-28T15:40:56.908Z"
+    },
+    {
+      "id": "lead-68deef90-c2f6-4d7c-845b-b17b6115bb51",
+      "email": "lukas@blackpapers.net",
+      "source": "login",
+      "status": "VIP_ACTIVE",
+      "userId": "2c4349a4-3ba8-4350-b8c5-c128a50dd47f",
+      "referralCode": null,
+      "referralOwnerEmail": null,
+      "subscriptionPlan": "ADMIN",
+      "subscriptionStatus": "ADMIN",
+      "lastEvent": "vip_activated",
+      "createdAt": "2026-03-28T15:39:34.535Z",
+      "updatedAt": "2026-04-09T22:20:19.094Z"
+    }
+  ],
+  "xFeed": {
+    "mode": "curated_manual",
+    "updatedAt": "2026-03-28T15:39:34.507Z",
+    "accounts": [
+      {
+        "id": "x-fedwatch",
+        "name": "Kobeissi Letter",
+        "handle": "KobeissiLetter",
+        "focus": "Macro / Equities",
+        "url": "https://x.com/KobeissiLetter"
+      },
+      {
+        "id": "x-bloomberg",
+        "name": "Bloomberg Markets",
+        "handle": "markets",
+        "focus": "Markets News",
+        "url": "https://x.com/markets"
+      },
+      {
+        "id": "x-wsj",
+        "name": "WSJ Markets",
+        "handle": "WSJmarkets",
+        "focus": "US Markets",
+        "url": "https://x.com/WSJmarkets"
+      },
+      {
+        "id": "x-coindesk",
+        "name": "CoinDesk",
+        "handle": "CoinDesk",
+        "focus": "Crypto News",
+        "url": "https://x.com/CoinDesk"
+      },
+      {
+        "id": "x-theblock",
+        "name": "The Block",
+        "handle": "TheBlock__",
+        "focus": "Crypto / Policy",
+        "url": "https://x.com/TheBlock__"
+      },
+      {
+        "id": "x-watcherguru",
+        "name": "Watcher.Guru",
+        "handle": "WatcherGuru",
+        "focus": "Crypto / Macro Headlines",
+        "url": "https://x.com/WatcherGuru"
+      }
+    ]
+  }
+}

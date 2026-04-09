@@ -154,6 +154,15 @@ Ce fichier contient utilisateurs, sessions, leads, posts, reviews, signaux.
    - aucun identifiant de test dans `store.json`,
    - aucun mot de passe en clair dans le code, la doc ou les fichiers versionnés,
    - rotation des secrets (`ADMIN_BOOTSTRAP_PASSWORD`, clés API, tokens) avant ouverture publique.
+5. Vérifier strictement la configuration session/cookies en production :
+   - `SESSION_TOKEN_SECRET` : obligatoire, long, aléatoire, jamais versionné.
+   - `SESSION_COOKIE_NAME` : cohérent et stable (`bp_session` recommandé).
+   - `SESSION_COOKIE_SECURE=true` en HTTPS.
+   - `SESSION_COOKIE_SAME_SITE=None` si frontend et backend sont sur des sous-domaines différents.
+   - `SESSION_IDLE_TTL_HOURS` : durée d’inactivité acceptable (ex: 12h).
+   - `SESSION_MAX_TTL_DAYS` : durée max de session (ex: 14j).
+   - `SESSION_ROTATION_MINUTES` : rotation régulière (ex: 30 min).
+   - `SESSION_PERSISTENT_LOGIN` / `PERSISTENT_SESSION_TTL_DAYS` : activer seulement si besoin métier validé.
 
 ## 10) Step-by-step admin (non technique)
 

@@ -332,6 +332,14 @@ const getFriendlyAuthError = (code: string): string => {
       return "Suppression du compte impossible pour le moment.";
     case 'session_cookie_blocked':
       return "Connexion refusée par le navigateur : cookie de session non accepté. Vérifiez la configuration backend (SameSite=None + Secure en HTTPS, CORS autorisé).";
+    case 'too_many_requests':
+      return "Trop de tentatives pour le moment. Patientez quelques minutes puis réessayez.";
+    case 'cors_origin_denied':
+      return "Connexion bloquée par CORS. Vérifiez CORS_ORIGIN côté backend Render.";
+    case 'api_response_not_json':
+      return "Le frontend ne parle pas au bon backend API. Vérifiez VITE_API_BASE_URL sur Render.";
+    case 'api_endpoint_misconfigured':
+      return "Endpoint API invalide ou inaccessible. Vérifiez VITE_API_BASE_URL et le déploiement API.";
     default:
       return "Authentification indisponible pour le moment. Réessayez dans quelques instants.";
   }
@@ -5988,9 +5996,17 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password, ...extraPayload })
       });
-      const data = await res.json();
+      const raw = await res.text();
+      let data: any = null;
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          throw new Error('api_response_not_json');
+        }
+      }
       if (!res.ok || !data?.user) {
-        throw new Error(data?.error || 'auth_failed');
+        throw new Error(data?.error || (res.ok ? 'auth_failed' : `http_${res.status}`));
       }
       applySessionState(data.user);
       const sessionOk = await loadServerSession();
